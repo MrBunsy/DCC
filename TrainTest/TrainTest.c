@@ -1,9 +1,9 @@
 /*
- * TrainTest.c
- *
- * Created: 28/02/2014 18:17:37
- *  Author: Luke
- */ 
+* TrainTest.c
+*
+* Created: 28/02/2014 18:17:37
+*  Author: Luke
+*/
 
 //define this before including delay
 #define F_CPU 8000000UL
@@ -15,12 +15,19 @@
 
 #include "TrainTest.h"
 
-#define LED_PORT PORTA
-#define LED_PIN PORTA7
-#define LED_DIRECTION DDRA
+#define DCC_PORT PORTA
+#define DCC_PIN0 PORTA6
+#define DCC_PIN1 PORTA7
+#define DCC_DIRECTION DDRA
+
+#define USE_DCC_TIMINGS
+
+volatile int64_t pwm;
 
 int main(void)
 {
+	
+	pwm=0;
 	
 	//Set timer0 to CTC mode (clears timer on compare match)
 	//TCCR0A,WGM02;//=2;
@@ -30,9 +37,9 @@ int main(void)
 	
 	//OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable
 	Setb(TIMSK0,OCIE0A);
-	
+	#ifndef USE_DCC_TIMINGS
 	//this is set by hardware I think: (when an interrupt is called)
-	////enable interrupt on compare match on timer0
+	//enable interrupt on compare match on timer0
 	//Setb(TIFR0,OCF0A);
 	
 	//set counter's clock to be systemclock/1024
@@ -41,24 +48,37 @@ int main(void)
 	Setb(TCCR0B,CS02);
 	
 	//what is the compare value for the timer?
-	OCR0A=200;
+	OCR0A=254;
+	#else
+	//set counter's clock to be systemclock/8
+	Clrb(TCCR0B,CS00);
+	Setb(TCCR0B,CS01);
+	Clrb(TCCR0B,CS02);
+	
+	//what is the compare value for the timer?
+	OCR0A=58;//58us, for half the period of a logical 1 for DCC
+	#endif
+	//this only gives 464 clock cycles between half periods - is this going to be enough?
 	
 	//enable interrupts globally
-	sei(); 
+	sei();
 	
 	////set led pin to output
-	//setb(led_direction,led_pin);
+	//setb(DCC_direction,DCC_pin);
 	//
-	////turn led pin on
-	//setb(led_port,led_pin);
+	//turn led pin on
+	Setb(DCC_PORT,DCC_PIN0);
+	Setb(DCC_PORT,DCC_PIN1);
 	//
-    //while(1)
-    //{
-        //_delay_ms(500);
-		//clrb(led_port,led_pin);
-		//_delay_ms(500);
-		//setb(led_port,led_pin);
-    //}
+	//while(1)
+	//{
+	//_delay_ms(500);
+	//clrb(DCC_port,DCC_pin);
+	//_delay_ms(500);
+	//setb(DCC_port,DCC_pin);
+	//}
+	
+	Clrb(DCC_PORT,DCC_PIN0);
 	
 	while(1)
 	{
@@ -69,5 +89,11 @@ int main(void)
 
 ISR(TIMER0_COMPA_vect)
 {
-	LED_PORT ^= (1 << LED_PIN); // Toggle the LED
+	pwm++;
+	if(pwm %6000==0)
+	{
+		
+	
+	DCC_PORT ^= (1 << DCC_PIN1); // Toggle the LED
+	}
 }
