@@ -23,11 +23,20 @@
 #define USE_DCC_TIMINGS
 
 volatile int64_t pwm;
+volatile int8_t dirstate;
+
+enum state{
+	FORWARDS,
+	STOP1,
+	BACKWARDS,
+	STOP2
+	};
 
 int main(void)
 {
 	
 	pwm=0;
+	dirstate = FORWARDS;
 	
 	//Set timer0 to CTC mode (clears timer on compare match)
 	//TCCR0A,WGM02;//=2;
@@ -92,8 +101,25 @@ ISR(TIMER0_COMPA_vect)
 	pwm++;
 	if(pwm %6000==0)
 	{
-		
+		switch(dirstate)
+		{
+			
+			case FORWARDS:
+			Setb(DCC_PORT,DCC_PIN1);
+			Clrb(DCC_PORT,DCC_PIN0);
+			break;
+			case BACKWARDS:
+			Setb(DCC_PORT,DCC_PIN0);
+			Clrb(DCC_PORT,DCC_PIN1);
+			break;
+			default:
+			Clrb(DCC_PORT,DCC_PIN0);
+			Clrb(DCC_PORT,DCC_PIN1);
+			break;
+		}
 	
-	DCC_PORT ^= (1 << DCC_PIN1); // Toggle the LED
+	//DCC_PORT ^= (1 << DCC_PIN1); // Toggle the LED
+	dirstate++;
+	dirstate%=4;
 	}
 }
