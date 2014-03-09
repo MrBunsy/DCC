@@ -22,15 +22,35 @@
 
 #define USE_DCC_TIMINGS
 
-volatile int64_t pwm;
-volatile int8_t dirstate;
+//volatile int64_t pwm;
+//volatile int8_t dirstate;
 
-enum state{
+
+
+
+enum transmitStates{
 	FORWARDS,
 	STOP1,
 	BACKWARDS,
 	STOP2
-	};
+};
+
+volatile int8_t transmitState;
+
+//The different states which are cycled through when transmitting data
+//a 1 is transmitted by being high during ONE_HIGH and then low during ONE_LOW
+//each for 58us (the rate at which the interrupt is called)
+//0 is tramsitted likewise, but high and low take twice as long
+//(spec calls for >100us, so I'm using 116us because this is easy)
+//See S91-2004-07 "A: Technique For Encoding Bits"
+enum bitState{
+	ONE_HIGH,
+	ONE_LOW,
+	ZERO_HIGH1,
+	ZERO_HIGH2,
+	ZERO_LOW1,
+	ZERO_LOW2
+};
 
 int main(void)
 {
@@ -51,11 +71,11 @@ int main(void)
 	//enable interrupt on compare match on timer0
 	//Setb(TIFR0,OCF0A);
 	
-	//set counter's clock to be systemclock/1024
-	Setb(TCCR0B,CS00);
-	Clrb(TCCR0B,CS01);
-	Setb(TCCR0B,CS02);
-	
+	////set counter's clock to be systemclock/1024
+	//Setb(TCCR0B,CS00);
+	//Clrb(TCCR0B,CS01);
+	//Setb(TCCR0B,CS02);
+	//
 	//what is the compare value for the timer?
 	OCR0A=254;
 	#else
@@ -95,7 +115,9 @@ int main(void)
 	}
 }
 
-
+/************************************************************************/
+/* Interrupt which is run every 58us                                    */
+/************************************************************************/
 ISR(TIMER0_COMPA_vect)
 {
 	pwm++;
@@ -117,9 +139,9 @@ ISR(TIMER0_COMPA_vect)
 			Clrb(DCC_PORT,DCC_PIN1);
 			break;
 		}
-	
-	//DCC_PORT ^= (1 << DCC_PIN1); // Toggle the LED
-	dirstate++;
-	dirstate%=4;
+		
+		//DCC_PORT ^= (1 << DCC_PIN1); // Toggle the LED
+		dirstate++;
+		dirstate%=4;
 	}
 }
