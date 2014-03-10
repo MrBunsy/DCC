@@ -24,18 +24,18 @@
 #define USE_DCC_TIMINGS
 
 //volatile int64_t pwm;
-//volatile int8_t dirstate;
+//volatile uint8_t dirstate;
 
-#define PACKET_BUFFER_SIZE (8)
+#define PACKET_BUFFER_SIZE (32)
 #define MAX_DATA_BYTES (4)
 
 #define PREAMBLE_LENGTH (16)
 
 //the information required for a packet.  From this a whole real packet can be generated
 typedef struct{
-	int8_t address;
-	int8_t dataBytes;//just the actual data bytes, we will work out the error detection bytes at transmission time
-	int8_t data[MAX_DATA_BYTES];
+	uint8_t address;
+	uint8_t dataBytes;//just the actual data bytes, we will work out the error detection bytes at transmission time
+	uint8_t data[MAX_DATA_BYTES];
 	//note that an error detection byte is a different type of data byte
 }packetData_t;
 
@@ -57,16 +57,20 @@ enum transmitStates{
 };
 
 //which state are we currently in?
-volatile int8_t transmitState;
+volatile uint8_t transmitState;
 
 //the packet we are currently transmitting
-volatile int8_t transmittingPacket;
+volatile uint8_t transmittingPacket;
+volatile uint8_t	packetsInBuffer;
+
+//true when it's safe to insert a new packet into the packetBuffer
+volatile bool safeToInsert;
 
 //which bit of the preamble/address/data/errordetect are we transmitting?
-volatile int8_t transmittingBit;
-//volatile int8_t addressBit;
+volatile uint8_t transmittingBit;
+//volatile uint8_t addressBit;
 //which data byte are we transmitting?
-volatile int8_t transmittingDataByte;
+volatile uint8_t transmittingDataByte;
 
 
 //The different states which are cycled through when transmitting data
@@ -84,14 +88,36 @@ enum bitStates{
 	ZERO_LOW2
 };
 
-volatile int8_t bitState;
+volatile uint8_t bitState;
 //
 ////given position in packetBuffer, get a pointer to that packet
-//packetData_t *getPacket(int8_t packetId)
+//packetData_t *getPacket(uint8_t packetId)
 //{
 	//return 
 //}
 
+void insertIdlePacket(uint8_t here)
+{
+	packetBuffer[here].address=0xFF;
+	packetBuffer[here].data[0]=0x00;
+	packetBuffer[here].dataBytes=1;
+}
+
+/*
+ * Get a pointer to a position in the packet buffer where we can add a packet.  Also increment packetsInBuffer.
+ */
+packetData_t *getInsertPacketPointer()
+{
+	packetData_t* p = &(packetBuffer[(transmittingPacket+packetsInBuffer)%PACKET_BUFFER_SIZE]);
+	packetsInBuffer++;
+	return p;
+}
+
+//void insertPacket(packetData_t packet)
+//{
+	//packetBuffer[(transmittingPacket+packetsInBuffer)%PACKET_BUFFER_SIZE]=packet;
+//}
+//
 int main(void)
 {
 		
@@ -104,51 +130,101 @@ int main(void)
 	//OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable
 	Setb(TIMSK0,OCIE0A);
 	#ifndef USE_DCC_TIMINGS
-	//this is set by hardware I think: (when an interrupt is called)
-	//enable interrupt on compare match on timer0
-	//Setb(TIFR0,OCF0A);
-	
-	//set counter's clock to be systemclock/1024
-	Setb(TCCR0B,CS00);
-	Clrb(TCCR0B,CS01);
-	Setb(TCCR0B,CS02);
-	//
-	//what is the compare value for the timer?
-	OCR0A=254;
+		//set counter's clock to be systemclock/1024
+		Setb(TCCR0B,CS00);
+		Clrb(TCCR0B,CS01);
+		Setb(TCCR0B,CS02);
+		//
+		//what is the compare value for the timer?
+		OCR0A=254;
 	#else
-	//set counter's clock to be systemclock/8 (so clock to timer will be 1MHz)
-	Clrb(TCCR0B,CS00);
-	Setb(TCCR0B,CS01);
-	Clrb(TCCR0B,CS02);
+		//set counter's clock to be systemclock/8 (so clock to timer will be 1MHz)
+		Clrb(TCCR0B,CS00);
+		Setb(TCCR0B,CS01);
+		Clrb(TCCR0B,CS02);
 	
-	//what is the compare value for the timer?
-	OCR0A=58;//58us, for half the period of a logical 1 for DCC
+		//what is the compare value for the timer?
+		OCR0A=58;//58us, for half the period of a logical 1 for DCC
 	#endif
 	//this only gives 464 clock cycles between half periods - is this going to be enough?
 	
 	//enable interrupts globally
 	sei();
 	
-	////set led pin to output
-	//setb(DCC_direction,DCC_pin);
-	//
 	//set DCC pins to output
 	Setb(DCC_DIRECTION,DCC_PIN0);
 	Setb(DCC_DIRECTION,DCC_PIN1);
-	//
-	//while(1)
-	//{
-	//_delay_ms(500);
-	//clrb(DCC_port,DCC_pin);
-	//_delay_ms(500);
-	//setb(DCC_port,DCC_pin);
-	//}
+
 	
 	Clrb(DCC_PORT,DCC_PIN0);
 	
+	//set up the packet buffer
+	transmittingPacket=0;
+	//put two idle packets in the buffer
+	insertIdlePacket(transmittingPacket);
+	insertIdlePacket(transmittingPacket+1);
+	packetsInBuffer=2;
+	
+	uint8_t demoState=0;
+	
+	uint8_t i;
+	packetData_t* nextPacket;
+	
 	while(1)
 	{
-		_delay_ms(500);
+		//if(packetsInBuffer < 3)
+		//{
+			////TODO work out how to deal with being interrupted at the wrong time
+			//IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
+			//this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
+			//
+		//}
+		_delay_ms(2000);
+		
+		//wait for it to be safe to insert a new packet
+		while(!safeToInsert);
+		//now safe!
+		demoState++;
+		switch(demoState)
+		{
+			case 0:
+				//go forwards!
+				for(i=0;i<4;i++)
+				{
+					nextPacket=getInsertPacketPointer();
+					nextPacket->address=3;
+					//forwards at full speed
+					//0111 1111
+					nextPacket->data[0]=0x7F;
+					nextPacket->dataBytes=1;
+				}
+				break;
+			case 3:
+				demoState=0;
+			case 1:
+				//stop
+				for(i=0;i<4;i++)
+				{
+					nextPacket=getInsertPacketPointer();
+					nextPacket->address=3;
+					//0110 0000
+					nextPacket->data[0]=0x60;
+					nextPacket->dataBytes=1;
+				}
+				break;
+			case 2:
+				//go backwards!
+				for(i=0;i<4;i++)
+				{
+					nextPacket=getInsertPacketPointer();
+					nextPacket->address=3;
+					//backwards at full speed
+					//0101 1111
+					nextPacket->data[0]=0x5F;
+					nextPacket->dataBytes=1;
+				}
+				break;
+		}
 	}
 }
 
@@ -157,11 +233,15 @@ inline packetData_t *currentPacket()
 	return	&(packetBuffer[transmittingPacket]);
 }
 //we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
-int8_t determineNextBit()
+uint8_t determineNextBit()
 {
+	safeToInsert=false;
 	switch(transmitState)
 	{
 		case PREAMBLE:
+			//only allow inserting new packets while transmitting preamble
+			//in the hope that an interrupt will never try and add an idle packet at the same time as the main thread is adding new packets
+			safeToInsert=true;
 			transmittingBit++;
 			if(transmittingBit > PREAMBLE_LENGTH)
 			{
@@ -178,8 +258,8 @@ int8_t determineNextBit()
 			//finished transmitting the packet start bit, start transmitting address
 			transmittingBit=0;
 			transmitState = ADDRESS;
-			packetData_t *d = currentPacket();
-			if(d->address & (1 << 8))
+			//packetData_t *d = currentPacket();
+			if(currentPacket()->address & (1 << 8))
 			{
 				//MSB of address is 1
 				return ONE_HIGH;
@@ -191,7 +271,7 @@ int8_t determineNextBit()
 			break;
 		case ADDRESS:
 			transmittingBit++;
-			
+			//packetData_t *d = currentPacket();
 			if(transmittingBit >= 8){
 				if(currentPacket()->dataBytes > 0)
 				{
@@ -207,7 +287,7 @@ int8_t determineNextBit()
 				
 			}else{
 				//still address data to transmit
-				if(d->address & (1 << (8-transmittingBit)))
+				if(currentPacket()->address & (1 << (8-transmittingBit)))
 				{
 					//jnext MSB of address is 1
 					return ONE_HIGH;
@@ -240,7 +320,7 @@ int8_t determineNextBit()
 				return ZERO_HIGH1;
 			}else{
 				//still data bits to transmit
-				if(d->data[transmittingDataByte] & (1 << (8-transmittingBit)))
+				if(currentPacket()->data[transmittingDataByte] & (1 << (8-transmittingBit)))
 				{
 					//jnext MSB of address is 1
 					return ONE_HIGH;
@@ -287,7 +367,20 @@ int8_t determineNextBit()
 			break;
 		case END_BIT:
 		default:
-			//TODO next data packet!!
+		
+			packetsInBuffer--;
+			transmitState=PREAMBLE;
+			if(packetsInBuffer<=0)
+			{
+				//no more packets in buffer, add an idle packet
+				//the main loop will handle adding other packets
+				packetsInBuffer=1;
+				insertIdlePacket(transmittingPacket);
+			}else{
+				transmittingPacket++;
+				transmittingPacket%=PACKET_BUFFER_SIZE;
+			}
+			
 			return ONE_HIGH;
 			break;
 	}
