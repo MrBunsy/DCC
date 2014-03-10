@@ -31,6 +31,8 @@
 
 #define PREAMBLE_LENGTH (16)
 
+#define DUPLICATION (8)
+
 //the information required for a packet.  From this a whole real packet can be generated
 typedef struct{
 	uint8_t address;
@@ -101,14 +103,14 @@ volatile uint8_t bitState;
 
 void insertIdlePacket(uint8_t here)
 {
-	//packetBuffer[here].address=0xFF;
-	//packetBuffer[here].data[0]=0x00;
-	//packetBuffer[here].dataBytes=1;
-	
-	//go forwards command
-	packetBuffer[here].address=3;
-	packetBuffer[here].data[0]=0x7f;
+	packetBuffer[here].address=0xFF;
+	packetBuffer[here].data[0]=0x00;
 	packetBuffer[here].dataBytes=1;
+	//
+	////go forwards command
+	//packetBuffer[here].address=3;
+	//packetBuffer[here].data[0]=0x7f;
+	//packetBuffer[here].dataBytes=1;
 }
 
 /*
@@ -173,7 +175,7 @@ int main(void)
 	insertIdlePacket(transmittingPacket+1);
 	packetsInBuffer=2;
 	
-	uint8_t demoState=0;
+	int8_t demoState=0;
 	
 	uint8_t i;
 	packetData_t* nextPacket;
@@ -188,7 +190,9 @@ int main(void)
 			//
 		//}
 		_delay_ms(2000);
+		
 		while(1);
+		
 		//wait for it to be safe to insert a new packet
 		while(!safeToInsert);
 		//now safe!
@@ -197,42 +201,53 @@ int main(void)
 		{
 			case 0:
 				//go forwards!
-				for(i=0;i<4;i++)
+				for(i=0;i<DUPLICATION;i++)
 				{
 					nextPacket=getInsertPacketPointer();
 					nextPacket->address=3;
 					//forwards at full speed
 					//0111 1111
-					nextPacket->data[0]=0x7F;
+					//nextPacket->data[0]=0x7F;
+					//half speed:
+					nextPacket->data[0]=0x77;
 					nextPacket->dataBytes=1;
 				}
+				
 				break;
 			case 3:
-				demoState=0;
+				demoState=-1;
 			case 1:
 				//stop
-				for(i=0;i<4;i++)
+				for(i=0;i<DUPLICATION;i++)
 				{
 					nextPacket=getInsertPacketPointer();
 					nextPacket->address=3;
 					//0110 0000
 					nextPacket->data[0]=0x60;
 					nextPacket->dataBytes=1;
+					////reset packet:
+					//nextPacket->address=3;
+					//nextPacket->data[0]=0x00;
+					//nextPacket->dataBytes=1;
 				}
+				
 				break;
 			case 2:
 				//go backwards!
-				for(i=0;i<4;i++)
+				for(i=0;i<DUPLICATION;i++)
 				{
 					nextPacket=getInsertPacketPointer();
 					nextPacket->address=3;
 					//backwards at full speed
 					//0101 1111
-					nextPacket->data[0]=0x5F;
+					//nextPacket->data[0]=0x5F;
+					//half speed:
+					nextPacket->data[0]=0x57;
 					nextPacket->dataBytes=1;
 				}
 				break;
 		}
+		
 	}
 }
 
