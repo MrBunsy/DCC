@@ -72,6 +72,9 @@ volatile uint8_t transmittingBit;
 //which data byte are we transmitting?
 volatile uint8_t transmittingDataByte;
 
+volatile uint8_t debugMemory[128];
+volatile uint16_t debugPosition=0;
+
 
 //The different states which are cycled through when transmitting data
 //a 1 is transmitted by being high during ONE_HIGH and then low during ONE_LOW
@@ -98,8 +101,13 @@ volatile uint8_t bitState;
 
 void insertIdlePacket(uint8_t here)
 {
-	packetBuffer[here].address=0xFF;
-	packetBuffer[here].data[0]=0x00;
+	//packetBuffer[here].address=0xFF;
+	//packetBuffer[here].data[0]=0x00;
+	//packetBuffer[here].dataBytes=1;
+	
+	//go forwards command
+	packetBuffer[here].address=3;
+	packetBuffer[here].data[0]=0x7f;
 	packetBuffer[here].dataBytes=1;
 }
 
@@ -180,7 +188,7 @@ int main(void)
 			//
 		//}
 		_delay_ms(2000);
-		
+		while(1);
 		//wait for it to be safe to insert a new packet
 		while(!safeToInsert);
 		//now safe!
@@ -275,6 +283,7 @@ uint8_t determineNextBit()
 			if(transmittingBit >= 8){
 				if(currentPacket()->dataBytes > 0)
 				{
+					
 					//there is data to transmit
 					transmitState=DATA_START_BIT;
 					return ZERO_HIGH1;
@@ -300,6 +309,7 @@ uint8_t determineNextBit()
 			break;
 		case DATA_START_BIT:
 			transmittingBit=0;
+			transmittingDataByte=0;
 			transmitState = DATA;
 			if(currentPacket()->data[transmittingDataByte] & (1 << 8))
 			{
@@ -313,7 +323,7 @@ uint8_t determineNextBit()
 			break;
 		case DATA:
 			transmittingBit++;
-			
+			//TODO expand to allow multiple data bytes?
 			if(transmittingBit >= 8){
 				//reached end of this data byte
 				transmitState = ERROR_START_BIT;
@@ -402,6 +412,7 @@ ISR(TIMER0_COMPA_vect)
 
 			Setb(DCC_PORT,DCC_PIN1);
 			Clrb(DCC_PORT,DCC_PIN0);
+			break;
 		case ONE_LOW:
 		case ZERO_LOW1:
 		case ZERO_LOW2:
@@ -430,6 +441,12 @@ ISR(TIMER0_COMPA_vect)
 		default:
 			//need the next bit!
 			bitState = determineNextBit();
+			debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
+			debugPosition++;
+			if(debugPosition==128*8-1)
+			{
+				debugPosition=0;
+			}
 			break;
 	}
 
