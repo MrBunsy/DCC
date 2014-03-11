@@ -189,9 +189,9 @@ int main(void)
 			//this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
 			//
 		//}
-		_delay_ms(2000);
+		_delay_ms(1500);
 		
-		while(1);
+		//while(1);
 		
 		//wait for it to be safe to insert a new packet
 		while(!safeToInsert);
@@ -282,7 +282,10 @@ uint8_t determineNextBit()
 			transmittingBit=0;
 			transmitState = ADDRESS;
 			//packetData_t *d = currentPacket();
-			if(currentPacket()->address & (1 << 8))
+			uint8_t address = currentPacket()->address;
+			uint8_t bit = (1 << 7);
+			
+			if(address & bit)
 			{
 				//MSB of address is 1
 				return ONE_HIGH;
@@ -311,7 +314,7 @@ uint8_t determineNextBit()
 				
 			}else{
 				//still address data to transmit
-				if(currentPacket()->address & (1 << (8-transmittingBit)))
+				if(currentPacket()->address & (1 << (7-transmittingBit)))
 				{
 					//jnext MSB of address is 1
 					return ONE_HIGH;
@@ -326,7 +329,7 @@ uint8_t determineNextBit()
 			transmittingBit=0;
 			transmittingDataByte=0;
 			transmitState = DATA;
-			if(currentPacket()->data[transmittingDataByte] & (1 << 8))
+			if(currentPacket()->data[transmittingDataByte] & (1 << 7))
 			{
 				//MSB of data byte is 1
 				return ONE_HIGH;
@@ -345,7 +348,7 @@ uint8_t determineNextBit()
 				return ZERO_HIGH1;
 			}else{
 				//still data bits to transmit
-				if(currentPacket()->data[transmittingDataByte] & (1 << (8-transmittingBit)))
+				if(currentPacket()->data[transmittingDataByte] & (1 << (7-transmittingBit)))
 				{
 					//jnext MSB of address is 1
 					return ONE_HIGH;
@@ -360,7 +363,7 @@ uint8_t determineNextBit()
 			transmittingBit=0;
 			transmitState = ERROR_DETECTION;
 			//error detection byte is xor of the data byte and address
-			if((currentPacket()->data[transmittingDataByte] ^ currentPacket()->address) & (1 << 8))
+			if((currentPacket()->data[transmittingDataByte] ^ currentPacket()->address) & (1 << 7))
 			{
 				//MSB of error detection byte is 1
 				return ONE_HIGH;
@@ -379,7 +382,7 @@ uint8_t determineNextBit()
 				return ONE_HIGH;
 			}else{
 				//still error detection bits to transmit
-				if((currentPacket()->data[transmittingDataByte] ^ currentPacket()->address) & (1 << (8-transmittingBit)))
+				if((currentPacket()->data[transmittingDataByte] ^ currentPacket()->address) & (1 << (7-transmittingBit)))
 				{
 					//jnext MSB of errordetect is 1
 					return ONE_HIGH;
@@ -401,7 +404,9 @@ uint8_t determineNextBit()
 				//the main loop will handle adding other packets
 				packetsInBuffer=1;
 				insertIdlePacket(transmittingPacket);
-			}else{
+			}
+			else
+			{
 				transmittingPacket++;
 				transmittingPacket%=PACKET_BUFFER_SIZE;
 			}
@@ -424,7 +429,6 @@ ISR(TIMER0_COMPA_vect)
 		case ONE_HIGH:
 		case ZERO_HIGH1:
 		case ZERO_HIGH2:
-
 			Setb(DCC_PORT,DCC_PIN1);
 			Clrb(DCC_PORT,DCC_PIN0);
 			break;
@@ -433,7 +437,7 @@ ISR(TIMER0_COMPA_vect)
 		case ZERO_LOW2:
 			Setb(DCC_PORT,DCC_PIN0);
 			Clrb(DCC_PORT,DCC_PIN1);
-		break;
+			break;
 	}
 	//proceed to output the rest of this bit, or work out what the next bit is
 	switch(bitState)
@@ -456,9 +460,10 @@ ISR(TIMER0_COMPA_vect)
 		default:
 			//need the next bit!
 			bitState = determineNextBit();
-			debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
+			//debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
+			debugMemory[debugPosition]=(bitState==ONE_HIGH ? 1 : 0);
 			debugPosition++;
-			if(debugPosition==128*8-1)
+			if(debugPosition==127)
 			{
 				debugPosition=0;
 			}
