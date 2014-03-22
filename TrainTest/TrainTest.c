@@ -91,6 +91,9 @@ packetData_t *getInsertPacketPointer() {
     return p;
 }
 
+/**
+* Power track in one direction for DC_DELAY, then wait and power in other direction.
+*/
 void DC_Test() {
     while (1) {
         _delay_ms(DC_DELAY);
@@ -109,6 +112,56 @@ void DC_Test() {
         Setb(DCC_PORT, DCC_PIN0);
         Setb(DCC_PORT, DCC_PIN1);
     }
+}
+
+void runDCCDemo(int8_t *demoState){
+	uint8_t i;
+	packetData_t* nextPacket;
+	_delay_ms(1500);
+
+	//wait for it to be safe to insert a new packet
+	while (!safeToInsert);
+	//now safe!
+	(*demoState)++;
+	switch (*demoState) {
+		case 0:
+		//go forwards!
+		for (i = 0; i < DUPLICATION; i++) {
+			nextPacket = getInsertPacketPointer();
+			nextPacket->address = 3;
+			//forwards at full speed
+			//0111 1111
+			//nextPacket->data[0]=0x7F;
+			//half speed:
+			nextPacket->data[0] = 0x77;
+			nextPacket->dataBytes = 1;
+		}
+
+		break;
+		case 3:
+		*demoState = -1;
+		case 1:
+		//stop
+		for (i = 0; i < DUPLICATION; i++) {
+			nextPacket = getInsertPacketPointer();
+			nextPacket->address = 3;
+			//0110 0000
+			nextPacket->data[0] = 0x60;
+			nextPacket->dataBytes = 1;
+		}
+
+		break;
+		case 2:
+		//go backwards!
+		for (i = 0; i < DUPLICATION; i++) {
+			nextPacket = getInsertPacketPointer();
+			nextPacket->address = 3;
+			nextPacket->data[0] = 0x57;
+			nextPacket->dataBytes = 1;
+		}
+		break;
+	}
+
 }
 
 int main(void) {
@@ -146,75 +199,23 @@ int main(void) {
 
     int8_t demoState = 0;
 
-    uint8_t i;
-    packetData_t* nextPacket;
+    //uint8_t i;
+    //packetData_t* nextPacket;
 
     while (1) {
 
         //IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
         //this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
-
-        _delay_ms(1500);
-
-        //wait for it to be safe to insert a new packet
-        while (!safeToInsert);
-        //now safe!
-        demoState++;
-        switch (demoState) {
-            case 0:
-                //go forwards!
-                for (i = 0; i < DUPLICATION; i++) {
-                    nextPacket = getInsertPacketPointer();
-                    nextPacket->address = 3;
-                    //forwards at full speed
-                    //0111 1111
-                    //nextPacket->data[0]=0x7F;
-                    //half speed:
-                    nextPacket->data[0] = 0x77;
-                    nextPacket->dataBytes = 1;
-                }
-
-                break;
-            case 3:
-                demoState = -1;
-            case 1:
-                //stop
-                for (i = 0; i < DUPLICATION; i++) {
-                    nextPacket = getInsertPacketPointer();
-                    nextPacket->address = 3;
-                    //0110 0000
-                    nextPacket->data[0] = 0x60;
-                    nextPacket->dataBytes = 1;
-                    ////reset packet:
-                    //nextPacket->address=3;
-                    //nextPacket->data[0]=0x00;
-                    //nextPacket->dataBytes=1;
-                }
-
-                break;
-            case 2:
-                //go backwards!
-                for (i = 0; i < DUPLICATION; i++) {
-                    nextPacket = getInsertPacketPointer();
-                    nextPacket->address = 3;
-                    //backwards at full speed
-                    //0101 1111
-                    //nextPacket->data[0]=0x5F;
-                    //half speed:
-                    nextPacket->data[0] = 0x57;
-                    nextPacket->dataBytes = 1;
-                }
-                break;
-        }
-
+		
+		runDCCDemo(&demoState);
     }
 }
 
 inline packetData_t *currentPacket() {
     return &(packetBuffer[transmittingPacket]);
 }
-//we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
 
+//we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
 uint8_t determineNextBit() {
     safeToInsert = false;
     switch (transmitState) {
