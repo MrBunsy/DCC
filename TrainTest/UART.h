@@ -12,7 +12,9 @@
 
 #include "Include.h"
 
-void timer_init();
+
 void USART_Init(uint16_t baud);
+uint8_t USART_Receive(void) ;
+void USART_Transmit( uint8_t data );
 
 #endif /* SETUP_H_ */

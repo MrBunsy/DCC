@@ -1,32 +1,21 @@
 /*
- * TrainTest.c
+ * SimpleDCC.c
  *
- * Created: 28/02/2014 18:17:37
+ * Created: 22/03/2014 11:46:43
  *  Author: Luke
  */
 
+#include "SimpleDCC.h"
 
 
-
-#include "TrainTest.h"
-#include "Setup.h"
-
-
-//the information required for a packet.  From this a whole real packet can be generated
-
-typedef struct {
-    uint8_t address;
-    uint8_t dataBytes; //just the actual data bytes, we will work out the error detection bytes at transmission time
-    uint8_t data[MAX_DATA_BYTES];
-    //note that an error detection byte is a different type of data byte
-} packetData_t;
 
 
 //buffer to hold packets info to be sent
 packetData_t packetBuffer[PACKET_BUFFER_SIZE];
 
-//where in the packet are we currently?
-
+/*
+ * where in the packet are we currently?
+ */
 enum transmitStates {
     PREAMBLE,
     PACKET_START_BIT,
@@ -45,9 +34,6 @@ volatile uint8_t transmitState;
 volatile uint8_t transmittingPacket;
 volatile uint8_t packetsInBuffer;
 
-//true when it's safe to insert a new packet into the packetBuffer
-volatile bool safeToInsert;
-
 //which bit of the preamble/address/data/errordetect are we transmitting?
 volatile uint8_t transmittingBit;
 //volatile uint8_t addressBit;
@@ -57,14 +43,15 @@ volatile uint8_t transmittingDataByte;
 volatile uint8_t debugMemory[128];
 volatile uint16_t debugPosition = 0;
 
-
-//The different states which are cycled through when transmitting data
-//a 1 is transmitted by being high during ONE_HIGH and then low during ONE_LOW
-//each for 58us (the rate at which the interrupt is called)
-//0 is tramsitted likewise, but high and low take twice as long
-//(spec calls for >100us, so I'm using 116us because this is easy)
-//See S91-2004-07 "A: Technique For Encoding Bits"
-
+/**
+ * 
+The different states which are cycled through when transmitting data
+a 1 is transmitted by being high during ONE_HIGH and then low during ONE_LOW
+each for 58us (the rate at which the interrupt is called)
+0 is tramsitted likewise, but high and low take twice as long
+(spec calls for >100us, so I'm using 116us because this is easy)
+See S91-2004-07 "A: Technique For Encoding Bits"
+ */
 enum bitStates {
     ONE_HIGH,
     ONE_LOW,
@@ -76,6 +63,19 @@ enum bitStates {
 
 volatile uint8_t bitState;
 
+void simpleDCC_init() {
+    //set DCC pins to output
+    Setb(DCC_DIRECTION, DCC_PIN0);
+    Setb(DCC_DIRECTION, DCC_PIN1);
+
+    //clear DCC output
+    Clrb(DCC_PORT, DCC_PIN0);
+    Clrb(DCC_PORT, DCC_PIN1);
+}
+
+/**
+ * Given a position in the packet buffer, insert an idle packet
+ */
 void insertIdlePacket(uint8_t here) {
     packetBuffer[here].address = 0xFF;
     packetBuffer[here].data[0] = 0x00;
@@ -91,9 +91,69 @@ packetData_t *getInsertPacketPointer() {
     return p;
 }
 
+/*
+ * Run in a loop to provide backwards and forwards commands to address 3
+ */
+void runDCCDemo() {
+
+
+    int8_t demoState = 0;
+    uint8_t i;
+    packetData_t* nextPacket;
+
+    while (1) {
+
+
+        _delay_ms(1500);
+
+        //wait for it to be safe to insert a new packet
+        while (!safeToInsert);
+        //now safe!
+        (demoState)++;
+        switch (demoState) {
+            case 0:
+                //go forwards!
+                for (i = 0; i < DUPLICATION; i++) {
+                    nextPacket = getInsertPacketPointer();
+                    nextPacket->address = 3;
+                    //forwards at full speed
+                    //0111 1111
+                    //nextPacket->data[0]=0x7F;
+                    //half speed:
+                    nextPacket->data[0] = 0x77;
+                    nextPacket->dataBytes = 1;
+                }
+
+                break;
+            case 3:
+                demoState = -1;
+            case 1:
+                //stop
+                for (i = 0; i < DUPLICATION; i++) {
+                    nextPacket = getInsertPacketPointer();
+                    nextPacket->address = 3;
+                    //0110 0000
+                    nextPacket->data[0] = 0x60;
+                    nextPacket->dataBytes = 1;
+                }
+
+                break;
+            case 2:
+                //go backwards!
+                for (i = 0; i < DUPLICATION; i++) {
+                    nextPacket = getInsertPacketPointer();
+                    nextPacket->address = 3;
+                    nextPacket->data[0] = 0x57;
+                    nextPacket->dataBytes = 1;
+                }
+                break;
+        }
+    }
+}
+
 /**
-* Power track in one direction for DC_DELAY, then wait and power in other direction.
-*/
+ * Power track in one direction for DC_DELAY, then wait and power in other direction.
+ */
 void DC_Test() {
     while (1) {
         _delay_ms(DC_DELAY);
@@ -114,108 +174,16 @@ void DC_Test() {
     }
 }
 
-void runDCCDemo(int8_t *demoState){
-	uint8_t i;
-	packetData_t* nextPacket;
-	_delay_ms(1500);
-
-	//wait for it to be safe to insert a new packet
-	while (!safeToInsert);
-	//now safe!
-	(*demoState)++;
-	switch (*demoState) {
-		case 0:
-		//go forwards!
-		for (i = 0; i < DUPLICATION; i++) {
-			nextPacket = getInsertPacketPointer();
-			nextPacket->address = 3;
-			//forwards at full speed
-			//0111 1111
-			//nextPacket->data[0]=0x7F;
-			//half speed:
-			nextPacket->data[0] = 0x77;
-			nextPacket->dataBytes = 1;
-		}
-
-		break;
-		case 3:
-		*demoState = -1;
-		case 1:
-		//stop
-		for (i = 0; i < DUPLICATION; i++) {
-			nextPacket = getInsertPacketPointer();
-			nextPacket->address = 3;
-			//0110 0000
-			nextPacket->data[0] = 0x60;
-			nextPacket->dataBytes = 1;
-		}
-
-		break;
-		case 2:
-		//go backwards!
-		for (i = 0; i < DUPLICATION; i++) {
-			nextPacket = getInsertPacketPointer();
-			nextPacket->address = 3;
-			nextPacket->data[0] = 0x57;
-			nextPacket->dataBytes = 1;
-		}
-		break;
-	}
-
-}
-
-int main(void) {
-
-    //set DCC pins to output
-    Setb(DCC_DIRECTION, DCC_PIN0);
-    Setb(DCC_DIRECTION, DCC_PIN1);
-
-    //enable interrupts globally
-    sei();
-
-    
-
-#ifdef DC_TEST
-	//if this is defined, just power the track with DC (used by me to test motors)
-    DC_Test();
-#endif
-    
-	timer_init();
-
-    //clear DCC output
-    Clrb(DCC_PORT, DCC_PIN0);
-    Clrb(DCC_PORT, DCC_PIN1);
-
-    //set up UART
-	USART_Init(BAUDRATE);
-
-
-    //set up the packet buffer
-    transmittingPacket = 0;
-    //put two idle packets in the buffer
-    insertIdlePacket(transmittingPacket);
-    insertIdlePacket(transmittingPacket + 1);
-    packetsInBuffer = 2;
-
-    int8_t demoState = 0;
-
-    //uint8_t i;
-    //packetData_t* nextPacket;
-
-    while (1) {
-
-        //IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
-        //this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
-		
-		runDCCDemo(&demoState);
-    }
-}
-
+/*
+ * Return a pointer to the current packet being transmitted in the packet buffer
+ */
 inline packetData_t *currentPacket() {
     return &(packetBuffer[transmittingPacket]);
 }
 
-//we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
+/**
+ * we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
+ */
 uint8_t determineNextBit() {
     safeToInsert = false;
     switch (transmitState) {

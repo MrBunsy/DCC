@@ -110,16 +110,19 @@
     <Compile Include="Include.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="Setup.c">
+    <Compile Include="SimpleDCC.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="Setup.h">
+    <Compile Include="UART.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="TrainTest.c">
+    <Compile Include="UART.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="TrainTest.h">
+    <Compile Include="main.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="SimpleDCC.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
