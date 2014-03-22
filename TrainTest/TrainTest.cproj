@@ -107,6 +107,15 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Include.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Setup.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Setup.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="TrainTest.c">
       <SubType>compile</SubType>
     </Compile>
