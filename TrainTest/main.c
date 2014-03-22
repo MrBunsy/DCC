@@ -11,6 +11,7 @@
 #include "SimpleDCC.h"
 #include "UART.h"
 
+#define DCC_DEMO
 
 #define BAUDRATE (19200)
 
@@ -59,17 +60,12 @@ int main(void) {
     runDCCDemo();
 #endif
 
-	char stringtest[10]  ="Hello\n";
-	uint8_t i=0;
-
     while (1) {
 
         //IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
         //this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
-		USART_Transmit(stringtest[i]);
 		
-		i++;
-		i%=6;
+		
 
     }
 }

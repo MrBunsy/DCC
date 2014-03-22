@@ -13,10 +13,17 @@
 //buffer to hold packets info to be sent
 packetData_t packetBuffer[PACKET_BUFFER_SIZE];
 
+enum baseStates {
+    DATA_MODE,
+    SERVICE_MODE,
+    ENTER_SERVICE_MODE,
+    LEAVE_SERVICE_MODE
+};
+
 /*
  * where in the packet are we currently?
  */
-enum transmitStates {
+enum dataTransmitStates {
     PREAMBLE,
     PACKET_START_BIT,
     ADDRESS,
@@ -35,10 +42,10 @@ volatile uint8_t transmittingPacket;
 volatile uint8_t packetsInBuffer;
 
 //which bit of the preamble/address/data/errordetect are we transmitting?
-volatile uint8_t transmittingBit;
+volatile uint8_t transmittedBits;
 //volatile uint8_t addressBit;
 //which data byte are we transmitting?
-volatile uint8_t transmittingDataByte;
+volatile uint8_t transmittedDataByte;
 
 volatile uint8_t debugMemory[128];
 volatile uint16_t debugPosition = 0;
@@ -71,6 +78,10 @@ void simpleDCC_init() {
     //clear DCC output
     Clrb(DCC_PORT, DCC_PIN0);
     Clrb(DCC_PORT, DCC_PIN1);
+	
+	//put an idle packet in the packetbuffer
+	insertIdlePacket(0);
+	packetsInBuffer=1;
 }
 
 /**
@@ -177,131 +188,112 @@ void DC_Test() {
 /*
  * Return a pointer to the current packet being transmitted in the packet buffer
  */
-inline packetData_t *currentPacket() {
+inline packetData_t *getCurrentPacket() {
     return &(packetBuffer[transmittingPacket]);
 }
 
 /**
  * we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
+ 
+ NOTE transmittedBits is the bits that *will* have been transmitted after this function has returned
  */
 uint8_t determineNextBit() {
     safeToInsert = false;
+	packetData_t *currentPacket = getCurrentPacket();
     switch (transmitState) {
         case PREAMBLE:
             //only allow inserting new packets while transmitting preamble
             //in the hope that an interrupt will never try and add an idle packet at the same time as the main thread is adding new packets
             safeToInsert = true;
-            transmittingBit++;
-            if (transmittingBit > PREAMBLE_LENGTH) {
-                //finished transmitting the preamble!
+            transmittedBits++;
+            if (transmittedBits >= PREAMBLE_LENGTH) {
+                //this is the last bit of the preamble
                 transmitState = PACKET_START_BIT;
-                transmittingBit = 0;
-                return ZERO_HIGH1;
-            } else {
-                //still mroe preamble bits to go
-                return ONE_HIGH;
             }
+            return ONE_HIGH;
             break;
         case PACKET_START_BIT:
-            //finished transmitting the packet start bit, start transmitting address
-            transmittingBit = 0;
+            //transmitting the packet start bit, the next state will be the address
+            transmittedBits = 0;
             transmitState = ADDRESS;
-            //packetData_t *d = currentPacket();
-            uint8_t address = currentPacket()->address;
-            uint8_t bit = (1 << 7);
-
-            if (address & bit) {
-                //MSB of address is 1
-                return ONE_HIGH;
-            } else {
-                return ZERO_HIGH1;
-            }
+            return ZERO_HIGH1;
             break;
         case ADDRESS:
-            transmittingBit++;
-            //packetData_t *d = currentPacket();
-            if (transmittingBit >= 8) {
-                if (currentPacket()->dataBytes > 0) {
+            transmittedBits++;
 
+            if (transmittedBits >= 8) {
+                //this is the last bit of the address, which state next?
+                if (currentPacket->dataBytes > 0) {
                     //there is data to transmit
+                    
                     transmitState = DATA_START_BIT;
-                    return ZERO_HIGH1;
                 } else {
                     //no data to transmit
                     transmitState = END_BIT;
-                    return ONE_HIGH;
-                }
-
-
-            } else {
-                //still address data to transmit
-                if (currentPacket()->address & (1 << (7 - transmittingBit))) {
-                    //jnext MSB of address is 1
-                    return ONE_HIGH;
-                } else {
-                    return ZERO_HIGH1;
                 }
             }
+
+            //address data to transmit
+            if (currentPacket->address & (1 << (8 - transmittedBits))) {
+                //next MSB of address is 1
+                return ONE_HIGH;
+            } else {
+                return ZERO_HIGH1;
+            }
+
             break;
         case DATA_START_BIT:
-            transmittingBit = 0;
-            transmittingDataByte = 0;
+            transmittedBits = 0;
             transmitState = DATA;
-            if (currentPacket()->data[transmittingDataByte] & (1 << 7)) {
-                //MSB of data byte is 1
-                return ONE_HIGH;
-            } else {
-                return ZERO_HIGH1;
-            }
+            return ZERO_HIGH1;
             break;
         case DATA:
-            transmittingBit++;
-            //TODO expand to allow multiple data bytes?
-            if (transmittingBit >= 8) {
+            transmittedBits++;
+
+            if (transmittedBits >= 8) {
                 //reached end of this data byte
+
+                
+                //TODO expand to allow multiple data bytes
                 transmitState = ERROR_START_BIT;
-                return ZERO_HIGH1;
-            } else {
-                //still data bits to transmit
-                if (currentPacket()->data[transmittingDataByte] & (1 << (7 - transmittingBit))) {
-                    //jnext MSB of address is 1
-                    return ONE_HIGH;
-                } else {
-                    return ZERO_HIGH1;
-                }
             }
+            //still data bits to transmit
+            if (currentPacket->data[transmittedDataByte] & (1 << (8 - transmittedBits))) {
+                //jnext MSB of address is 1
+                return ONE_HIGH;
+            } else {
+                return ZERO_HIGH1;
+            }
+
             break;
         case ERROR_START_BIT:
-            transmittingBit = 0;
+            transmittedBits = 0;
+            //next transmit the error detection byte
             transmitState = ERROR_DETECTION;
-            //error detection byte is xor of the data byte and address
-            if ((currentPacket()->data[transmittingDataByte] ^ currentPacket()->address) & (1 << 7)) {
-                //MSB of error detection byte is 1
+
+            return ZERO_HIGH1;
+            break;
+        case ERROR_DETECTION:
+            transmittedBits++;
+
+            if (transmittedBits >= 8) {
+                //reached end of this error detection byte
+                transmitState = END_BIT;
+
+            }
+            //still error detection bits to transmit
+            if ((currentPacket->data[transmittedDataByte] ^ currentPacket->address) & (1 << (8 - transmittedBits))) {
+                //next MSB of error detect is 1
                 return ONE_HIGH;
             } else {
                 return ZERO_HIGH1;
             }
-            break;
-        case ERROR_DETECTION:
-            transmittingBit++;
 
-            if (transmittingBit >= 8) {
-                //reached end of this error detection byte
-                transmitState = END_BIT;
-                return ONE_HIGH;
-            } else {
-                //still error detection bits to transmit
-                if ((currentPacket()->data[transmittingDataByte] ^ currentPacket()->address) & (1 << (7 - transmittingBit))) {
-                    //jnext MSB of errordetect is 1
-                    return ONE_HIGH;
-                } else {
-                    return ZERO_HIGH1;
-                }
-            }
             break;
         case END_BIT:
+		//the end bit can form part of the next preamble
         default:
-
+			transmittedBits=0;
             packetsInBuffer--;
             transmitState = PREAMBLE;
             if (packetsInBuffer <= 0) {

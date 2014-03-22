@@ -28,7 +28,9 @@
 #define MAX_DATA_BYTES (4)
 
 #define PREAMBLE_LENGTH (16)
+#define LONG_PREAMBLE_LENGTH (32)
 
+//how many duplicate packets to transmit
 #define DUPLICATION (8)
 
 //if running DC test, how long between switching modes
