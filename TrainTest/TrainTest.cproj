@@ -107,10 +107,22 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="TrainTest.c">
+    <Compile Include="Include.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="TrainTest.h">
+    <Compile Include="SimpleDCC.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="UART.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="UART.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="main.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="SimpleDCC.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
