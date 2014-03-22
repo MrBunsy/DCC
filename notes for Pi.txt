@@ -1,0 +1,4 @@
+sudo apt-get install librxtx-java
+sudo ln -s /dev/ttyAMA0 /dev/ttyS80
+
+run this java programme as sudo
