@@ -15,8 +15,7 @@
 
 
 
-//this equates to nearly 19200
-#define BAUDRATE 25
+
 
 #define DCC_PORT PORTA
 #define DCC_PIN0 PORTA6

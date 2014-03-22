@@ -13,7 +13,7 @@
 #include "Include.h"
 
 
-void USART_Init(uint16_t baud);
+void USART_Init(uint32_t baud);
 uint8_t USART_Receive(void) ;
 void USART_Transmit( uint8_t data );
 
