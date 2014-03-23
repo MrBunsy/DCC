@@ -45,7 +45,9 @@ volatile uint8_t packetsInBuffer;
 volatile uint8_t transmittedBits;
 //volatile uint8_t addressBit;
 //which data byte are we transmitting?
-volatile uint8_t transmittedDataByte;
+volatile uint8_t transmittingDataByte;
+//build up the error detection byte as we transmit
+volatile uint8_t errorDetectionByte;
 
 volatile uint8_t debugMemory[128];
 volatile uint16_t debugPosition = 0;
@@ -78,10 +80,10 @@ void simpleDCC_init() {
     //clear DCC output
     Clrb(DCC_PORT, DCC_PIN0);
     Clrb(DCC_PORT, DCC_PIN1);
-	
-	//put an idle packet in the packetbuffer
-	insertIdlePacket(0);
-	packetsInBuffer=1;
+
+    //put an idle packet in the packetbuffer
+    insertIdlePacket(0);
+    packetsInBuffer = 1;
 }
 
 /**
@@ -196,10 +198,19 @@ inline packetData_t *getCurrentPacket() {
  * we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
  
  NOTE transmittedBits is the bits that *will* have been transmitted after this function has returned
+ 
+ 
+ TODO - THE ADDRESS CAN/SHOULD JUST BE PART OF THE DATA, then it's just preamble + various data bytes + error detection
+ 
+ the error detection byte *appears* (this remains untested) to be all the data + Address xored togehter, furthering the
+  idea that address shouldn't be a special case
+ 
+ 
+ thought - the spec does differentiate between data and address, might it be easier to comprehend if I also do?
  */
 uint8_t determineNextBit() {
     safeToInsert = false;
-	packetData_t *currentPacket = getCurrentPacket();
+    packetData_t *currentPacket = getCurrentPacket();
     switch (transmitState) {
         case PREAMBLE:
             //only allow inserting new packets while transmitting preamble
@@ -225,7 +236,9 @@ uint8_t determineNextBit() {
                 //this is the last bit of the address, which state next?
                 if (currentPacket->dataBytes > 0) {
                     //there is data to transmit
-                    
+                    //start building up the error detection byte
+                    errorDetectionByte = currentPacket->address;
+                    transmittingDataByte = 0;
                     transmitState = DATA_START_BIT;
                 } else {
                     //no data to transmit
@@ -244,6 +257,8 @@ uint8_t determineNextBit() {
             break;
         case DATA_START_BIT:
             transmittedBits = 0;
+            //this will always be 1 based, since it gets set to zero at the end of address
+            transmittingDataByte++;
             transmitState = DATA;
             return ZERO_HIGH1;
             break;
@@ -252,13 +267,19 @@ uint8_t determineNextBit() {
 
             if (transmittedBits >= 8) {
                 //reached end of this data byte
-
-                
-                //TODO expand to allow multiple data bytes
-                transmitState = ERROR_START_BIT;
+				//xor with error detection byte as per spec
+				//I'm fairly certain that every data byte (& address byte) should be xored together to make the final error detection byte
+                errorDetectionByte ^= currentPacket->data[transmittingDataByte - 1];
+                if (currentPacket->dataBytes > transmittingDataByte) {
+                    //more data bytes to transmit
+                    transmitState = DATA_START_BIT;
+                } else {
+                    //no more to transmit, start the error correction byte
+                    transmitState = ERROR_START_BIT;
+                }
             }
             //still data bits to transmit
-            if (currentPacket->data[transmittedDataByte] & (1 << (8 - transmittedBits))) {
+            if (currentPacket->data[transmittingDataByte - 1] & (1 << (8 - transmittedBits))) {
                 //jnext MSB of address is 1
                 return ONE_HIGH;
             } else {
@@ -282,7 +303,7 @@ uint8_t determineNextBit() {
 
             }
             //still error detection bits to transmit
-            if ((currentPacket->data[transmittedDataByte] ^ currentPacket->address) & (1 << (8 - transmittedBits))) {
+            if (errorDetectionByte & (1 << (8 - transmittedBits))) {
                 //next MSB of error detect is 1
                 return ONE_HIGH;
             } else {
@@ -291,9 +312,9 @@ uint8_t determineNextBit() {
 
             break;
         case END_BIT:
-		//the end bit can form part of the next preamble
+            //the end bit can form part of the next preamble
         default:
-			transmittedBits=0;
+            transmittedBits = 0;
             packetsInBuffer--;
             transmitState = PREAMBLE;
             if (packetsInBuffer <= 0) {
