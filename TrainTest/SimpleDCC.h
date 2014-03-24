@@ -13,18 +13,24 @@
 
 #include "Include.h"
 
+#include "UART.h"
 
 
-
-
+//port registers for the DCC pins
 #define DCC_PORT PORTA
-#define DCC_PIN0 PORTA6
-#define DCC_PIN1 PORTA7
 #define DCC_DIRECTION DDRA
+#define DCC_PIN PINA
+//DCC and nDCC pins
+#define DCC_OUT_PIN PORTA6
+#define DCC_nOUT_PIN PORTA7
+//service mode switch pin
+#define SERVICE_PIN PINA0
+#define SERVICE_PULLUP PORTA0
+
 
 #define USE_DCC_TIMINGS
 
-#define PACKET_BUFFER_SIZE (32)
+#define PACKET_BUFFER_SIZE (64)
 #define MAX_DATA_BYTES (4)
 
 #define PREAMBLE_LENGTH (16)
@@ -47,9 +53,16 @@ void simpleDCC_init();
  */
 typedef struct {
     uint8_t address;
-    uint8_t dataBytes; //just the actual data bytes, we will work out the error detection bytes at transmission time
+    uint8_t dataBytes; //just the actual data bytes, we will work out the error detection byte at transmission time
     uint8_t data[MAX_DATA_BYTES];
     //note that an error detection byte is a different type of data byte
-} packetData_t;
+} dccPacket_t;
+
+typedef enum baseStates {
+    RUNNING_MODE,
+	SERVICE_MODE,
+	ENTER_SERVICE_MODE,
+	LEAVE_SERVICE_MODE
+} baseStates_t;
 
 #endif /* TRAINTEST_H_ */

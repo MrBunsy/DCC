@@ -7,3 +7,9 @@
 
 #include "comms.h"
 
+/**
+ * Block waiting for packets over serial
+ */
+void receivePackets(void){
+	
+}
