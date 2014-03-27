@@ -58,7 +58,7 @@ int main(void) {
 
 #ifdef DCC_DEMO
 	//setAddress(5);
-    runDCCDemo(4);
+    runDCCDemo(5);
 #endif
 
     while (1) {

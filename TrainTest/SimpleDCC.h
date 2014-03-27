@@ -81,4 +81,9 @@ typedef enum baseStates {
 	LEAVE_SERVICE_MODE
 } baseStates_t;
 
+enum speedModes{
+	SPEEDMODE_14STEP,
+	SPEEDMODE_28STEP
+	};
+
 #endif /* TRAINTEST_H_ */

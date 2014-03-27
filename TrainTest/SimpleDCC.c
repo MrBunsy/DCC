@@ -132,11 +132,11 @@ void simpleDCC_init() {
     for (i = 0; i < 10; i++) {
         insertIdlePacket(false);
     }
-	
-	//ready to go straight into service mode - NOT REQUIRED
-	for(i=0;i<20;i++){
-		insertIdlePacket(false);
-	}
+
+    //ready to go straight into service mode - NOT REQUIRED
+    for (i = 0; i < 20; i++) {
+        insertIdlePacket(false);
+    }
 }
 
 /*
@@ -148,25 +148,25 @@ bool canEnterServiceMode() {
 }
 
 /*
-* direct mode service mode to set the address CV
-*
-* returns false if unsuccessful (although atm this will only happen if we can't enter service mode due to mech switch)
-*/
-bool setCVwithDirectMode(uint16_t cv,uint8_t newValue){
+ * direct mode service mode to set the address CV
+ *
+ * returns false if unsuccessful (although atm this will only happen if we can't enter service mode due to mech switch)
+ */
+bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     //don't allow this unless we can enter service mode
     if (!canEnterServiceMode()) {
         return false;
     }
-	
-	uint8_t i;
-	dccPacket_t *packet;
-	
-    
+
+    uint8_t i;
+    dccPacket_t *packet;
+
+
     //at least three reset packets with long preamble
     for (i = 0; i < 5; i++) {
         insertResetPacket(true);
     }
-	
+
     for (i = 0; i < 15; i++) {
         packet = getInsertPacketPointer();
         /*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
@@ -176,23 +176,59 @@ bool setCVwithDirectMode(uint16_t cv,uint8_t newValue){
         CC=11 Write byte
          */
         //01111100 = 7c
-        packet->address = 0b01111100 | ( (cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
-		packet->data[0] = cv & 0xff;//lowest 8 bits of cv
+        packet->address = 0b01111100 | ((cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
+        packet->data[0] = cv & 0xff; //lowest 8 bits of cv
         packet->data[1] = newValue;
         packet->dataBytes = 2;
         packet->longPreamble = true;
     }
-	
-	//at least 6 reset packets
-//    for (i = 0; i < 8; i++) {
-//        insertResetPacket(true);
-//    }
-	operatingState = SERVICE_MODE;
+
+    //at least 6 reset packets
+    //    for (i = 0; i < 8; i++) {
+    //        insertResetPacket(true);
+    //    }
+    operatingState = SERVICE_MODE;
     return true;
 }
 
 bool setAddress(uint8_t newAddress) {
-	return setCVwithDirectMode(0,newAddress);
+    return setCVwithDirectMode(0, newAddress);
+}
+
+/*
+ * Speed is 2-28 (in 14step mode the LSB is ignored)
+ speed 0 is stop
+ speed 1 is emergency stop
+ */
+void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode) {
+    dccPacket_t *nextPacket = getInsertPacketPointer();
+    nextPacket->address = address;
+    //01DCSSSS
+    //C is an aditional lowest significant bit used in 28speed mode.  in 14speed mode it is the light
+    nextPacket->data[0] = 0b01000000;
+    if (forwards) {
+        nextPacket->data[0] |= 0b00100000;
+    }
+
+    //remove LSB and stick speed in lower nibble
+    nextPacket->data[0] |= (speed >> 1) & 0x0f;
+
+    //Speeds range from 2-16 (in 14speed step mode) and 2-28 in 28mode
+    switch (mode) {
+        case SPEEDMODE_14STEP:
+            //set C (LSB of speed) to be the direction to control the light
+            if (forwards) {
+                nextPacket->data[0] |= 0b00010000;
+            }
+
+            break;
+        case SPEEDMODE_28STEP:
+            //stick LSB of speed in C
+            nextPacket->data[0] |= (speed & 0x01) << 4;
+            break;
+    }
+    nextPacket->dataBytes = 1;
+    nextPacket->longPreamble = false;
 }
 
 /*
@@ -203,14 +239,14 @@ void runDCCDemo(uint8_t address) {
 
     int8_t demoState = 0;
     uint8_t i;
-    dccPacket_t* nextPacket;
+    //dccPacket_t* nextPacket;
 
-	
 
-	//setAddress(4);
-	//while(1);
-	//return;
-	
+
+    //setAddress(4);
+    //while(1);
+    //return;
+
     while (1) {
 
 
@@ -225,16 +261,8 @@ void runDCCDemo(uint8_t address) {
                 //go forwards!
                 USART_Transmit('f');
                 for (i = 0; i < DUPLICATION; i++) {
-                    nextPacket = getInsertPacketPointer();
-                    nextPacket->address = address;
-                    //forwards at full speed
-                    //0111 1111
-                    //nextPacket->data[0]=0x7F;
-                    //half speed:
-                    nextPacket->data[0] = 0x77;
-                    nextPacket->dataBytes = 1;
+                    insertSpeedPacket(address, 15, true, SPEEDMODE_14STEP);
                 }
-
                 break;
             case 3:
                 USART_Transmit('\n');
@@ -243,22 +271,14 @@ void runDCCDemo(uint8_t address) {
                 //stop
                 USART_Transmit('s');
                 for (i = 0; i < DUPLICATION; i++) {
-                    nextPacket = getInsertPacketPointer();
-                    nextPacket->address = address;
-                    //0110 0000
-                    nextPacket->data[0] = 0x60;
-                    nextPacket->dataBytes = 1;
+                    insertSpeedPacket(address, 0, true, SPEEDMODE_14STEP);
                 }
-
                 break;
             case 2:
                 //go backwards!
                 USART_Transmit('b');
                 for (i = 0; i < DUPLICATION; i++) {
-                    nextPacket = getInsertPacketPointer();
-                    nextPacket->address = address;
-                    nextPacket->data[0] = 0x57;
-                    nextPacket->dataBytes = 1;
+                    insertSpeedPacket(address, 15, false, SPEEDMODE_14STEP);
                 }
                 break;
         }
@@ -325,21 +345,17 @@ void fillPacketBuffer() {
             setIdleLED();
             break;
         case SERVICE_MODE:
-			//clear DCC output
-			Clrb(DCC_PORT, DCC_OUT_PIN);
-			Clrb(DCC_PORT, DCC_nOUT_PIN);
-			//leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
-			//we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
-			_delay_ms(500);
-			operatingState=OPERATIONS_MODE;
-			insertIdlePacket(false);
+            //clear DCC output
+            Clrb(DCC_PORT, DCC_OUT_PIN);
+            Clrb(DCC_PORT, DCC_nOUT_PIN);
+            //leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
+            //we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
+            _delay_ms(500);
+            operatingState = OPERATIONS_MODE;
+            insertIdlePacket(false);
             break;
     }
 }
-
-
-
-
 
 /**
  * we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
@@ -481,10 +497,10 @@ uint8_t determineNextBit() {
                 if (packetBuffer[transmittingPacket].longPreamble) {
                     setServiceLED();
                 } else if (packetBuffer[transmittingPacket].address == 0xff) {
-					//idle packet
+                    //idle packet
                     setIdleLED();
                 } else {
-					//assume everything thing else is data
+                    //assume everything thing else is data
                     setDataLED();
 
                 }
