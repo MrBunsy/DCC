@@ -26,7 +26,8 @@ public class Message {
         this.priority = priority;
     }
 
-    public void addHeader(ByteBuffer b, int messageType) {
+    public ByteBuffer getHeader( int messageType) {
+        ByteBuffer b=  ByteBuffer.allocate(MESSAGE_SIZE);
         //sync bytes
         //b.putInt((int)(SYNC_INT) & 0xffffffff);
         b.put((byte)0xff);
@@ -39,21 +40,31 @@ public class Message {
         b.put((byte) (train.getAddress() & 0xff));
         //priority byte
         b.put((byte) (priority & 0xff));
+        
+        return b;
     }
 
+    /**
+     * messages are different sizes, but all are read in fully on the AVR side (for better or worse as a design decision...)
+     * so pad out the missing bytes
+     * @param buffer 
+     */
+    public void addFooter(ByteBuffer buffer){
+        while(buffer.remaining() > 0){
+            //System.out.println("pad");
+            buffer.put((byte)0x00);
+        }
+        buffer.flip();
+    }
+    
     public ByteBuffer getByteBuffer() {
         return ByteBuffer.allocate(MESSAGE_SIZE);
     }
 
     public static void writeBuffer(ByteBuffer buffer, OutputStream stream) throws IOException {
         WritableByteChannel channel = Channels.newChannel(stream);
-        System.out.println("Writing");
-        
-        //System.out.println(buffer.);
-        
+ 
         channel.write(buffer);
-        channel.close();
         stream.flush();
-        //while(buffer.hasRemaining())
     }
 }
