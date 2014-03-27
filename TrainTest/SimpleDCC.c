@@ -68,7 +68,7 @@ volatile uint8_t bitState;
  * Get a pointer to a position in the packet buffer where we can add a packet.  Also increment packetsInBuffer.
  */
 dccPacket_t *getInsertPacketPointer() {
-	while(packetsInBuffer==PACKET_BUFFER_SIZE);
+    while (packetsInBuffer == PACKET_BUFFER_SIZE);
     dccPacket_t* p = &(packetBuffer[(transmittingPacket + packetsInBuffer) % PACKET_BUFFER_SIZE]);
     packetsInBuffer++;
     return p;
@@ -77,70 +77,135 @@ dccPacket_t *getInsertPacketPointer() {
 /**
  * Insert an idle packet at the end of the packetbuffer
  */
-void insertIdlePacket() {
-	dccPacket_t *packet = getInsertPacketPointer();
+void insertIdlePacket(bool longPreamble) {
+    dccPacket_t *packet = getInsertPacketPointer();
     packet->address = 0xFF;
     packet->data[0] = 0x00;
     packet->dataBytes = 1;
+    packet->longPreamble = longPreamble;
 }
 
 /*
  * Insert a reset packet at the end of the packetbuffer
  */
-void insertResetPacket(){
-	dccPacket_t *packet = getInsertPacketPointer();
-	packet->address = 0x00;
-	packet->data[0] = 0x00;
-	packet->dataBytes = 1;
+void insertResetPacket(bool longPreamble) {
+    dccPacket_t *packet = getInsertPacketPointer();
+    packet->address = 0x00;
+    packet->data[0] = 0x00;
+    packet->dataBytes = 1;
+    packet->longPreamble = longPreamble;
 }
 
 void simpleDCC_init() {
     //set DCC pins to output
     Setb(DCC_DIRECTION, DCC_OUT_PIN);
     Setb(DCC_DIRECTION, DCC_nOUT_PIN);
-	
-	//set service mode switch pin to input
-	Clrb(DCC_DIRECTION, SERVICE_PIN);
-	
-	//enable pullup for service mode switch (making it active low, and if the hardware isn't present, we be unable to enter service mode)
-	Setb(DCC_PORT,SERVICE_PULLUP);
+    Setb(DCC_DIRECTION, DCC_IDLE_LED);
+    Setb(DCC_DIRECTION, DCC_SERVICE_MODE_LED);
+    Setb(DCC_DIRECTION, DCC_DATA_LED);
+
+    //set service mode switch pin to input
+    Clrb(DCC_DIRECTION, DCC_nSERVICE_PIN);
+
+    //enable pullup for service mode switch (making it active low, and if the hardware isn't present, we be unable to enter service mode)
+    Setb(DCC_PORT, DCC_SERVICE_PULLUP);
 
     //clear DCC output
     Clrb(DCC_PORT, DCC_OUT_PIN);
     Clrb(DCC_PORT, DCC_nOUT_PIN);
 
     /*
-	In the case where there is no information about the previous state of the system, the Digital Command
-	Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
-	minimum of ten (10) idle packets.
-	 - RP-9.2.4 DCC Fail Safe
-	*/
+        In the case where there is no information about the previous state of the system, the Digital Command
+        Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
+        minimum of ten (10) idle packets.
+         - RP-9.2.4 DCC Fail Safe
+     */
+
+    operatingState = OPERATIONS_MODE;
+    transmittingPacket = 0;
+    packetsInBuffer = 0;
+    int i;
+    for (i = 0; i < 20; i++) {
+        insertResetPacket(false);
+    }
+
+    for (i = 0; i < 10; i++) {
+        insertIdlePacket(false);
+    }
 	
-	operatingState=RUNNING_MODE;
-	transmittingPacket=0;
-	packetsInBuffer=0;
-	int i;
+	//ready to go straight into service mode - NOT REQUIRED
 	for(i=0;i<20;i++){
-		insertResetPacket();
-	}
-	
-	for(i=0;i<10;i++){
-		insertIdlePacket();
+		insertIdlePacket(false);
 	}
 }
 
+/*
+ * Returns true if we can enter service mode (the switch is toggled)
+ */
+bool canEnterServiceMode() {
+    //is the service mode pin low?
+    return (Rdb(DCC_PIN, DCC_nSERVICE_PIN) == 0);
+}
 
+/*
+* direct mode service mode to set the address CV
+*/
+bool setAddress(uint8_t newAddress) {
+    //don't allow this unless we can enter service mode
+    if (!canEnterServiceMode()) {
+        return false;
+    }
+	
+	uint8_t i;
+	dccPacket_t *packet;
+	
+    
+    //at least three reset packets
+    for (i = 0; i < 5; i++) {
+        insertResetPacket(true);
+    }
+	
+    for (i = 0; i < 15; i++) {
+        packet = getInsertPacketPointer();
+        /*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
+        two bit address (AA) in the first data byte being the most significant bits of the CV number.
+        CC=10 Bit Manipulation
+        CC=01 Verify byte
+        CC=11 Write byte
+         */
+        //01111100 = 7c
+        packet->address = 0b01111100;//0x7c;//set
+		//packet->address=0x74;//verify
+		packet->data[0] = 0;
+        packet->data[1] = newAddress;
+        packet->dataBytes = 2;
+        packet->longPreamble = true;
+    }
+	
+	//at least 6 reset packets
+//    for (i = 0; i < 8; i++) {
+//        insertResetPacket(true);
+//    }
+	operatingState = SERVICE_MODE;
+    return true;
+}
 
 /*
  * Run in a loop to provide backwards and forwards commands to address 3
  */
-void runDCCDemo() {
+void runDCCDemo(uint8_t address) {
 
 
     int8_t demoState = 0;
     uint8_t i;
     dccPacket_t* nextPacket;
 
+	
+
+	//setAddress(4);
+	//while(1);
+	//return;
+	
     while (1) {
 
 
@@ -153,10 +218,10 @@ void runDCCDemo() {
         switch (demoState) {
             case 0:
                 //go forwards!
-				USART_Transmit('f');
+                USART_Transmit('f');
                 for (i = 0; i < DUPLICATION; i++) {
                     nextPacket = getInsertPacketPointer();
-                    nextPacket->address = 3;
+                    nextPacket->address = address;
                     //forwards at full speed
                     //0111 1111
                     //nextPacket->data[0]=0x7F;
@@ -167,14 +232,14 @@ void runDCCDemo() {
 
                 break;
             case 3:
-				USART_Transmit('\n');
+                USART_Transmit('\n');
                 demoState = -1;
             case 1:
                 //stop
-				USART_Transmit('s');
+                USART_Transmit('s');
                 for (i = 0; i < DUPLICATION; i++) {
                     nextPacket = getInsertPacketPointer();
-                    nextPacket->address = 3;
+                    nextPacket->address = address;
                     //0110 0000
                     nextPacket->data[0] = 0x60;
                     nextPacket->dataBytes = 1;
@@ -183,10 +248,10 @@ void runDCCDemo() {
                 break;
             case 2:
                 //go backwards!
-				USART_Transmit('b');
+                USART_Transmit('b');
                 for (i = 0; i < DUPLICATION; i++) {
                     nextPacket = getInsertPacketPointer();
-                    nextPacket->address = 3;
+                    nextPacket->address = address;
                     nextPacket->data[0] = 0x57;
                     nextPacket->dataBytes = 1;
                 }
@@ -225,18 +290,42 @@ inline dccPacket_t *getCurrentPacket() {
     return &(packetBuffer[transmittingPacket]);
 }
 
+void setDataLED() {
+    Setb(DCC_PORT, DCC_DATA_LED);
+    Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
+    Clrb(DCC_PORT, DCC_IDLE_LED);
+}
+
+void setServiceLED() {
+    Setb(DCC_PORT, DCC_SERVICE_MODE_LED);
+    Clrb(DCC_PORT, DCC_DATA_LED);
+    Clrb(DCC_PORT, DCC_IDLE_LED);
+}
+
+void setIdleLED() {
+    Setb(DCC_PORT, DCC_IDLE_LED);
+    Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
+    Clrb(DCC_PORT, DCC_DATA_LED);
+}
+
 /*
  * The packet buffer has just run out, fill it with something depending on what state we're in
  */
 void fillPacketBuffer() {
     switch (operatingState) {
-        case RUNNING_MODE:
+        case OPERATIONS_MODE:
             //normal running mode, we just want to keep sending out idle packets
             //TODO here is where more inteligent logic about which commands to prioritise can go
-            insertIdlePacket();
+            insertIdlePacket(false);
+            setIdleLED();
             break;
         case SERVICE_MODE:
-
+			//TODO remove this - for now, if compled in service mode (run out of packets), turn off output
+			cli();
+			//clear DCC output
+			Clrb(DCC_PORT, DCC_OUT_PIN);
+			Clrb(DCC_PORT, DCC_nOUT_PIN);
+			exit(0);
             break;
         case ENTER_SERVICE_MODE:
             break;
@@ -246,13 +335,10 @@ void fillPacketBuffer() {
             //TODO do not allow entry to service mode unless a mechanical switch is toggled
     }
 }
-/*
-* Returns true if we can enter service mode (the switch is toggled)
-*/
-bool canEnterServiceMode(){
-	//is the service mode pin low?
-	return (Rdb(DCC_PIN,SERVICE_PIN) == 0);
-}
+
+
+
+
 
 /**
  * we've reached the end of transmitting a bit, need to set up the state to transmit the next bit
@@ -277,7 +363,8 @@ uint8_t determineNextBit() {
             //in the hope that an interrupt will never try and add an idle packet at the same time as the main thread is adding new packets
             safeToInsert = true;
             transmittedBits++;
-            if (transmittedBits >= PREAMBLE_LENGTH) {
+            //long preamble is for service mode packets
+            if (transmittedBits >= (currentPacket->longPreamble ? LONG_PREAMBLE_LENGTH : PREAMBLE_LENGTH)) {
                 //this is the last bit of the preamble
                 transmitPacketState = PACKET_START_BIT;
             }
@@ -388,6 +475,18 @@ uint8_t determineNextBit() {
             } else {
                 transmittingPacket++;
                 transmittingPacket %= PACKET_BUFFER_SIZE;
+
+                //detect what the next packet type is and set LED accordingly
+                if (packetBuffer[transmittingPacket].longPreamble) {
+                    setServiceLED();
+                } else if (packetBuffer[transmittingPacket].address == 0xff) {
+					//idle packet
+                    setIdleLED();
+                } else {
+					//assume everything thing else is data
+                    setDataLED();
+
+                }
             }
 
             return ONE_HIGH;

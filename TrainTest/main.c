@@ -57,7 +57,7 @@ int main(void) {
     USART_Init(BAUDRATE);
 
 #ifdef DCC_DEMO
-    runDCCDemo();
+    runDCCDemo(3);
 #endif
 
     while (1) {
