@@ -12,9 +12,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import gnu.io.*;
-import java.util.Enumeration;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class TwoWaySerialComm {
+public class TwoWaySerialComm implements CommLink{
     
     //protected SerialWriter outWriter;
     protected InputStream in;
@@ -44,7 +45,7 @@ public class TwoWaySerialComm {
                 
                 //this.outWriter = new SerialWriter(out);
                 
-                (new Thread(new SerialReader(in,this))).start();
+                (new Thread(new InputStreamReader(in,this))).start();
                 //(new Thread(this.outWriter)).start();
 
             } else {
@@ -53,32 +54,51 @@ public class TwoWaySerialComm {
         }
     }
 
-    public void dataIn(byte[] buffer, int len){
-        System.out.print(new String(buffer, 0, len));
+    public OutputStream getOutputStream(){
+        return out;
     }
     
-    public static class SerialReader implements Runnable {
+    public InputStream getInputStream(){
+        return in;
+    }
+    
+    @Override
+    public void receivedMessage(byte[] buffer, int len){
+        System.out.print(new String(buffer, 0, len));
+    }
 
-        InputStream in;
-        TwoWaySerialComm comm;
-
-        public SerialReader(InputStream in,TwoWaySerialComm comm) {
-            this.in = in;
-            this.comm=comm;
-        }
-
-        public void run() {
-            byte[] buffer = new byte[1024];
-            int len = -1;
-            try {
-                while ((len = this.in.read(buffer)) > -1) {
-                    comm.dataIn(buffer,len);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+    @Override
+    public void sendMessage(Message message) {
+        try {
+            Message.writeBuffer(message.getByteBuffer(), out);
+        } catch (IOException ex) {
+            Logger.getLogger(TwoWaySerialComm.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+
+    
+//    public static class SerialReader implements Runnable {
+//
+//        InputStream in;
+//        TwoWaySerialComm comm;
+//
+//        public SerialReader(InputStream in,TwoWaySerialComm comm) {
+//            this.in = in;
+//            this.comm=comm;
+//        }
+//
+//        public void run() {
+//            byte[] buffer = new byte[1024];
+//            int len = -1;
+//            try {
+//                while ((len = this.in.read(buffer)) > -1) {
+//                    comm.receivedMessage(buffer,len);
+//                }
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//        }
+//    }
 
     public static class SerialWriter implements Runnable {
 

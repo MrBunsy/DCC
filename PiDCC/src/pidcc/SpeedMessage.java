@@ -12,7 +12,6 @@ import java.nio.ByteBuffer;
  */
 public class SpeedMessage extends Message{
     
-    private Train train;
     private boolean forwards;
     private int speed;
     
@@ -23,15 +22,14 @@ public class SpeedMessage extends Message{
     }
     
     public ByteBuffer getByteBuffer(){
-        ByteBuffer bb=  ByteBuffer.allocate(MESSAGE_SIZE);
-        //insert message type
-        //bb.put((byte)SET_SPEED);
-        addHeader(bb, SET_SPEED);
+        
+        ByteBuffer bb = getHeader(SET_SPEED);
         
         bb.put((byte)(this.speed & 0xff));
         bb.put((byte)(this.forwards ? 1 : 0));
-        padByteBuffer(bb);
-        bb.flip();
+        
+        addFooter(bb);
+
         return bb;
     }
 }
