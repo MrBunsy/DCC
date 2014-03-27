@@ -10,10 +10,12 @@
 
 #include "SimpleDCC.h"
 #include "UART.h"
+#include "comms.h"
 
+//#define DCC_DEMO
 
 #define BAUDRATE (19200)
-
+//#define DC_TEST
 //#define BAUDRATE (9600)
 /*
  * Enable the timer to call an interrupt every 58us
@@ -40,7 +42,7 @@ void timer_init() {
 }
 
 int main(void) {
-
+	
     simpleDCC_init();
 
 #ifdef DC_TEST
@@ -56,20 +58,16 @@ int main(void) {
     USART_Init(BAUDRATE);
 
 #ifdef DCC_DEMO
-    runDCCDemo();
+	//setAddress(5);
+    runDCCDemo(5);
 #endif
-
-	char stringtest[10]  ="Hello\n";
-	uint8_t i=0;
 
     while (1) {
 
         //IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
         //this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
-		USART_Transmit(stringtest[i]);
 		
-		i++;
-		i%=6;
+		processInput();
 
     }
 }
