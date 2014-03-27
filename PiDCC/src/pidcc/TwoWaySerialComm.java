@@ -15,8 +15,15 @@ import gnu.io.*;
 import java.util.Enumeration;
 
 public class TwoWaySerialComm {
-
-    void connect(String portName) throws Exception {
+    
+    //protected SerialWriter outWriter;
+    protected InputStream in;
+    protected OutputStream out;
+    
+    void connect(String portName) throws Exception{
+        connect(portName, 19200);
+    }
+    void connect(String portName, int baud) throws Exception {
         CommPortIdentifier portIdentifier = CommPortIdentifier
                 .getPortIdentifier(portName);
         if (portIdentifier.isCurrentlyOwned()) {
@@ -27,16 +34,18 @@ public class TwoWaySerialComm {
 
             if (commPort instanceof SerialPort) {
                 SerialPort serialPort = (SerialPort) commPort;
-                serialPort.setSerialPortParams(19200,//57600,
+                serialPort.setSerialPortParams(baud,//57600,
                         SerialPort.DATABITS_8,
                         SerialPort.STOPBITS_1,
                         SerialPort.PARITY_NONE);
 
-                InputStream in = serialPort.getInputStream();
-                OutputStream out = serialPort.getOutputStream();
-
-                (new Thread(new SerialReader(in))).start();
-                (new Thread(new SerialWriter(out))).start();
+                in = serialPort.getInputStream();
+                out = serialPort.getOutputStream();
+                
+                //this.outWriter = new SerialWriter(out);
+                
+                (new Thread(new SerialReader(in,this))).start();
+                //(new Thread(this.outWriter)).start();
 
             } else {
                 System.out.println("Error: Only serial ports are handled by this example.");
@@ -44,12 +53,18 @@ public class TwoWaySerialComm {
         }
     }
 
+    public void dataIn(byte[] buffer, int len){
+        System.out.print(new String(buffer, 0, len));
+    }
+    
     public static class SerialReader implements Runnable {
 
         InputStream in;
+        TwoWaySerialComm comm;
 
-        public SerialReader(InputStream in) {
+        public SerialReader(InputStream in,TwoWaySerialComm comm) {
             this.in = in;
+            this.comm=comm;
         }
 
         public void run() {
@@ -57,7 +72,7 @@ public class TwoWaySerialComm {
             int len = -1;
             try {
                 while ((len = this.in.read(buffer)) > -1) {
-                    System.out.print(new String(buffer, 0, len));
+                    comm.dataIn(buffer,len);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -88,12 +103,12 @@ public class TwoWaySerialComm {
     public static void main(String[] args) {
         try {
             
-            Enumeration t = CommPortIdentifier.getPortIdentifiers();
-            System.out.println("ports:");
-            while(t.hasMoreElements())
-            {
-                System.out.println(t.nextElement());
-            }
+//            Enumeration t = CommPortIdentifier.getPortIdentifiers();
+//            System.out.println("ports:");
+//            while(t.hasMoreElements())
+//            {
+//                System.out.println(t.nextElement());
+//            }
             
             
             (new TwoWaySerialComm()).connect("/dev/ttyS80");
