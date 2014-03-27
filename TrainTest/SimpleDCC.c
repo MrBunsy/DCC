@@ -199,22 +199,22 @@ bool setAddress(uint8_t newAddress) {
  * Turn on or off front light (this is all atm, need to understand a bit more before implementing other features)
  */
 void insertLightsPacket(uint8_t address, bool on) {
-	/*
-	send a Function Group One Instruction
-	The format of this instruction is 100DDDDD
-	see RP-9.2.1 Extended Packet Format
-	*/
-	dccPacket_t *nextPacket = getInsertPacketPointer();
-	nextPacket->address = address;
-	nextPacket->data[0] = 0b10000000;
-	
-	if(on){
-		//the FL bit
-		//note: "If Bit 1 of CV#29 has a value of one (1), then bit 4 controls function FL, otherwise bit 4 has no meaning."
-		nextPacket->data[0] |= 0b10010000;
-	}	
-	nextPacket->dataBytes=1;
-	nextPacket->longPreamble=false;
+    /*
+    send a Function Group One Instruction
+    The format of this instruction is 100DDDDD
+    see RP-9.2.1 Extended Packet Format
+     */
+    dccPacket_t *nextPacket = getInsertPacketPointer();
+    nextPacket->address = address;
+    nextPacket->data[0] = 0b10000000;
+
+    if (on) {
+        //the FL bit
+        //note: "If Bit 1 of CV#29 has a value of one (1), then bit 4 controls function FL, otherwise bit 4 has no meaning."
+        nextPacket->data[0] |= 0b10010000;
+    }
+    nextPacket->dataBytes = 1;
+    nextPacket->longPreamble = false;
 }
 
 /*
@@ -271,9 +271,9 @@ void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mo
 /*
  * wait for it to be safe to insert a new packet
  */
-void waitForSafeToInsert(){
-	
-	while (!safeToInsert);
+void waitForSafeToInsert() {
+
+    while (!safeToInsert);
 }
 
 /*
@@ -294,10 +294,10 @@ void runDCCDemo(uint8_t address) {
 
     while (1) {
 
-		
+
         _delay_ms(1500);
-		insertLightsPacket(address,true);
-		
+        insertLightsPacket(address, true);
+
         //wait for it to be safe to insert a new packet
         while (!safeToInsert);
         //now safe!
@@ -359,6 +359,7 @@ void DC_Test() {
  * Return a pointer to the current packet being transmitted in the packet buffer
  */
 //inline 
+
 dccPacket_t *getCurrentPacket() {
     return &(packetBuffer[transmittingPacket]);
 }
@@ -380,6 +381,7 @@ void setIdleLED() {
     Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_DATA_LED);
 }
+
 
 /*
  * The packet buffer has just run out, fill it with something depending on what state we're in
