@@ -149,8 +149,10 @@ bool canEnterServiceMode() {
 
 /*
 * direct mode service mode to set the address CV
+*
+* returns false if unsuccessful (although atm this will only happen if we can't enter service mode due to mech switch)
 */
-bool setAddress(uint8_t newAddress) {
+bool setCVwithDirectMode(uint16_t cv,uint8_t newValue){
     //don't allow this unless we can enter service mode
     if (!canEnterServiceMode()) {
         return false;
@@ -160,7 +162,7 @@ bool setAddress(uint8_t newAddress) {
 	dccPacket_t *packet;
 	
     
-    //at least three reset packets
+    //at least three reset packets with long preamble
     for (i = 0; i < 5; i++) {
         insertResetPacket(true);
     }
@@ -174,10 +176,9 @@ bool setAddress(uint8_t newAddress) {
         CC=11 Write byte
          */
         //01111100 = 7c
-        packet->address = 0b01111100;//0x7c;//set
-		//packet->address=0x74;//verify
-		packet->data[0] = 0;
-        packet->data[1] = newAddress;
+        packet->address = 0b01111100 | ( (cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
+		packet->data[0] = cv & 0xff;//lowest 8 bits of cv
+        packet->data[1] = newValue;
         packet->dataBytes = 2;
         packet->longPreamble = true;
     }
@@ -188,6 +189,10 @@ bool setAddress(uint8_t newAddress) {
 //    }
 	operatingState = SERVICE_MODE;
     return true;
+}
+
+bool setAddress(uint8_t newAddress) {
+	return setCVwithDirectMode(0,newAddress);
 }
 
 /*
@@ -320,19 +325,15 @@ void fillPacketBuffer() {
             setIdleLED();
             break;
         case SERVICE_MODE:
-			//TODO remove this - for now, if compled in service mode (run out of packets), turn off output
-			cli();
 			//clear DCC output
 			Clrb(DCC_PORT, DCC_OUT_PIN);
 			Clrb(DCC_PORT, DCC_nOUT_PIN);
-			exit(0);
+			//leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
+			//we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
+			_delay_ms(500);
+			operatingState=OPERATIONS_MODE;
+			insertIdlePacket(false);
             break;
-        case ENTER_SERVICE_MODE:
-            break;
-        case LEAVE_SERVICE_MODE:
-            break;
-
-            //TODO do not allow entry to service mode unless a mechanical switch is toggled
     }
 }
 
