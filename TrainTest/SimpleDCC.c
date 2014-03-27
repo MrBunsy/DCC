@@ -196,6 +196,28 @@ bool setAddress(uint8_t newAddress) {
 }
 
 /*
+ * Turn on or off front light (this is all atm, need to understand a bit more before implementing other features)
+ */
+void insertLightsPacket(uint8_t address, bool on) {
+	/*
+	send a Function Group One Instruction
+	The format of this instruction is 100DDDDD
+	see RP-9.2.1 Extended Packet Format
+	*/
+	dccPacket_t *nextPacket = getInsertPacketPointer();
+	nextPacket->address = address;
+	nextPacket->data[0] = 0b10000000;
+	
+	if(on){
+		//the FL bit
+		//note: "If Bit 1 of CV#29 has a value of one (1), then bit 4 controls function FL, otherwise bit 4 has no meaning."
+		nextPacket->data[0] |= 0b10010000;
+	}	
+	nextPacket->dataBytes=1;
+	nextPacket->longPreamble=false;
+}
+
+/*
  * Speed is 3-28 (in 14step mode the LSB is ignored) in 14 adn 28 speedmodes
  Speed is 2-127 in 128 speedmode
  speed 0 is stop
@@ -206,16 +228,16 @@ void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mo
     nextPacket->address = address;
 
     if (mode == SPEEDMODE_128STEP) {
-		//send an Advanced Operations Instruction (001)
-		//The format of this instruction is 001CCCCC 0 DDDDDDDD
-		//see RP-9.2.1 Extended Packet Format
-		//CCCCC = 11111: 128 Speed Step Control
-		nextPacket->data[0] = 0b00111111;
-		//7 LSBs are speed
-		nextPacket->data[1] = speed & 0b01111111;
-		//bit7 is direction
-		nextPacket->data[1] |= (forwards ? 0x1 << 7 : 0);
-		nextPacket->dataBytes = 2;
+        //send an Advanced Operations Instruction (001)
+        //The format of this instruction is 001CCCCC 0 DDDDDDDD
+        //see RP-9.2.1 Extended Packet Format
+        //CCCCC = 11111: 128 Speed Step Control
+        nextPacket->data[0] = 0b00111111;
+        //7 LSBs are speed
+        nextPacket->data[1] = speed & 0b01111111;
+        //bit7 is direction
+        nextPacket->data[1] |= (forwards ? 0x1 << 7 : 0);
+        nextPacket->dataBytes = 2;
     } else {
         //01DCSSSS
         //C is an aditional lowest significant bit used in 28speed mode.  in 14speed mode it is the light
@@ -247,6 +269,14 @@ void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mo
 }
 
 /*
+ * wait for it to be safe to insert a new packet
+ */
+void waitForSafeToInsert(){
+	
+	while (!safeToInsert);
+}
+
+/*
  * Run in a loop to provide backwards and forwards commands to address 3
  */
 void runDCCDemo(uint8_t address) {
@@ -264,9 +294,10 @@ void runDCCDemo(uint8_t address) {
 
     while (1) {
 
-
+		
         _delay_ms(1500);
-
+		insertLightsPacket(address,true);
+		
         //wait for it to be safe to insert a new packet
         while (!safeToInsert);
         //now safe!
@@ -277,7 +308,7 @@ void runDCCDemo(uint8_t address) {
                 USART_Transmit('f');
                 for (i = 0; i < DUPLICATION; i++) {
                     //insertSpeedPacket(address, 15, true, SPEEDMODE_14STEP);
-					insertSpeedPacket(address, 30, true, SPEEDMODE_128STEP);
+                    insertSpeedPacket(address, 100, true, SPEEDMODE_128STEP);
                 }
                 break;
             case 3:
@@ -287,14 +318,14 @@ void runDCCDemo(uint8_t address) {
                 //stop
                 USART_Transmit('s');
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertSpeedPacket(address, 0, true, SPEEDMODE_28STEP);
+                    insertSpeedPacket(address, 0, true, SPEEDMODE_128STEP);
                 }
                 break;
             case 2:
                 //go backwards!
                 USART_Transmit('b');
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertSpeedPacket(address, 30, false, SPEEDMODE_128STEP);
+                    insertSpeedPacket(address, 100, false, SPEEDMODE_128STEP);
                 }
                 break;
         }
@@ -327,7 +358,8 @@ void DC_Test() {
 /*
  * Return a pointer to the current packet being transmitted in the packet buffer
  */
-inline dccPacket_t *getCurrentPacket() {
+//inline 
+dccPacket_t *getCurrentPacket() {
     return &(packetBuffer[transmittingPacket]);
 }
 

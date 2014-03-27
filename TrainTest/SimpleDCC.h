@@ -1,9 +1,9 @@
 /*
-* TrainTest.h
-*
-* Created: 01/03/2014 16:21:12
-*  Author: Luke
-*/
+ * TrainTest.h
+ *
+ * Created: 01/03/2014 16:21:12
+ *  Author: Luke
+ */
 
 
 #ifndef TRAINTEST_H_
@@ -41,7 +41,7 @@ While the baseline packet has a length of 3 data bytes separated by a "0" bit, a
 packet format definition may have a length of between 3 and 6 data bytes each separated by a "0" bit.
  - RP-9.2.1 DCC Extended Packet Format
  (I think address counts as a packet)
-*/
+ */
 #define MAX_DATA_BYTES (5)
 
 //minimum of 14 (though one can be last 1 of previous packet)
@@ -61,12 +61,16 @@ volatile bool safeToInsert;
 void runDCCDemo(uint8_t address);
 void simpleDCC_init();
 bool setAddress(uint8_t newAddress);
+void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode);
+void insertLightsPacket(uint8_t address, bool on);
+bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
+void waitForSafeToInsert();
 
 /*
  * the information required for a packet.  From this a whole real packet can be generated
  */
 typedef struct {
-	bool longPreamble;
+    bool longPreamble;
     uint8_t address;
     uint8_t dataBytes; //just the actual data bytes, we will work out the error detection byte at transmission time
     uint8_t data[MAX_DATA_BYTES];
@@ -74,17 +78,25 @@ typedef struct {
 } dccPacket_t;
 
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
+
 typedef enum baseStates {
     OPERATIONS_MODE,
-	SERVICE_MODE,
-	ENTER_SERVICE_MODE,
-	LEAVE_SERVICE_MODE
+    SERVICE_MODE,
+    ENTER_SERVICE_MODE,
+    LEAVE_SERVICE_MODE
 } baseStates_t;
 
-enum speedModes{
-	SPEEDMODE_14STEP,
-	SPEEDMODE_28STEP,
-	SPEEDMODE_128STEP
-	};
+enum speedModes {
+    SPEEDMODE_14STEP,
+    SPEEDMODE_28STEP,
+    SPEEDMODE_128STEP
+};
+
+//enum functions {
+    //LIGHT_FRONT = 0,
+    //LIGHT_REAR,
+	//FUNCTION_3,
+	//FUNCTION_4
+//};
 
 #endif /* TRAINTEST_H_ */
