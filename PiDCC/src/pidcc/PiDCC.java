@@ -32,23 +32,23 @@ public class PiDCC extends TwoWaySerialComm{
                 Thread.sleep(1500);
                 
                 SpeedMessage s = new SpeedMessage(train, true, 80);
-                Message.writeBuffer(s.getByteBuffer(), out);
-                Message.writeBuffer(s.getByteBuffer(), out);
+                Message.writeBuffer(s.getByteBuffer(), out,'a');
+                Message.writeBuffer(s.getByteBuffer(), out,'b');
                 
                 Thread.sleep(1500);
                 s = new SpeedMessage(train, true, 0);
-                Message.writeBuffer(s.getByteBuffer(), out);
-                Message.writeBuffer(s.getByteBuffer(), out);
+                Message.writeBuffer(s.getByteBuffer(), out,'c');
+                Message.writeBuffer(s.getByteBuffer(), out,'d');
                 
                 Thread.sleep(1500);
                 s = new SpeedMessage(train, false, 80);
-                Message.writeBuffer(s.getByteBuffer(), out);
-                Message.writeBuffer(s.getByteBuffer(), out);
+                Message.writeBuffer(s.getByteBuffer(), out,'e');
+                Message.writeBuffer(s.getByteBuffer(), out,'f');
                 
                 Thread.sleep(1500);
                 s = new SpeedMessage(train, false, 0);
-                Message.writeBuffer(s.getByteBuffer(), out);
-                Message.writeBuffer(s.getByteBuffer(), out);
+                Message.writeBuffer(s.getByteBuffer(), out,'g');
+                Message.writeBuffer(s.getByteBuffer(), out,'h');
                 
             } catch (InterruptedException ex) {
                 Logger.getLogger(PiDCC.class.getName()).log(Level.SEVERE, null, ex);

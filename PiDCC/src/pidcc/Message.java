@@ -41,16 +41,32 @@ public class Message {
         b.put((byte) (priority & 0xff));
     }
 
+    /**
+     * messages are different sizes, but all are read in fully on the AVR side (for better or worse as a design decision...)
+     * so pad out the missing bytes
+     * @param buffer 
+     */
+    public void padByteBuffer(ByteBuffer buffer){
+        while(buffer.remaining() > 0){
+            //System.out.println("pad");
+            buffer.put((byte)0x00);
+        }
+    }
+    
     public ByteBuffer getByteBuffer() {
         return ByteBuffer.allocate(MESSAGE_SIZE);
     }
 
-    public static void writeBuffer(ByteBuffer buffer, OutputStream stream) throws IOException {
+    public static void writeBuffer(ByteBuffer buffer, OutputStream stream, int test) throws IOException {
         WritableByteChannel channel = Channels.newChannel(stream);
         System.out.println("Writing");
         
-        //System.out.println(buffer.);
-        
+//        while(buffer.remaining() > 0){
+//            buffer.put((byte)(test & 0xff));
+//            buffer.flip();
+//        }
+//        //System.out.println(buffer.);
+//        
         channel.write(buffer);
         channel.close();
         stream.flush();

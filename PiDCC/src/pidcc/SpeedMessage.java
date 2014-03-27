@@ -30,6 +30,7 @@ public class SpeedMessage extends Message{
         
         bb.put((byte)(this.speed & 0xff));
         bb.put((byte)(this.forwards ? 1 : 0));
+        padByteBuffer(bb);
         bb.flip();
         return bb;
     }
