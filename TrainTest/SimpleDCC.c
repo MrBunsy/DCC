@@ -196,38 +196,53 @@ bool setAddress(uint8_t newAddress) {
 }
 
 /*
- * Speed is 2-28 (in 14step mode the LSB is ignored)
+ * Speed is 3-28 (in 14step mode the LSB is ignored) in 14 adn 28 speedmodes
+ Speed is 2-127 in 128 speedmode
  speed 0 is stop
- speed 1 is emergency stop
+ speed 1,2 is emergency stop
  */
 void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode) {
     dccPacket_t *nextPacket = getInsertPacketPointer();
     nextPacket->address = address;
-    //01DCSSSS
-    //C is an aditional lowest significant bit used in 28speed mode.  in 14speed mode it is the light
-    nextPacket->data[0] = 0b01000000;
-    if (forwards) {
-        nextPacket->data[0] |= 0b00100000;
+
+    if (mode == SPEEDMODE_128STEP) {
+		//send an Advanced Operations Instruction (001)
+		//The format of this instruction is 001CCCCC 0 DDDDDDDD
+		//see RP-9.2.1 Extended Packet Format
+		//CCCCC = 11111: 128 Speed Step Control
+		nextPacket->data[0] = 0b00111111;
+		//7 LSBs are speed
+		nextPacket->data[1] = speed & 0b01111111;
+		//bit7 is direction
+		nextPacket->data[1] |= (forwards ? 0x1 << 7 : 0);
+		nextPacket->dataBytes = 2;
+    } else {
+        //01DCSSSS
+        //C is an aditional lowest significant bit used in 28speed mode.  in 14speed mode it is the light
+        nextPacket->data[0] = 0b01000000;
+        if (forwards) {
+            nextPacket->data[0] |= 0b00100000;
+        }
+
+        //remove LSB and stick speed in lower nibble
+        nextPacket->data[0] |= (speed >> 1) & 0x0f;
+
+        //Speeds range from 2-16 (in 14speed step mode) and 2-28 in 28mode
+        switch (mode) {
+            case SPEEDMODE_14STEP:
+                //set C (LSB of speed) to be the direction to control the light
+                if (forwards) {
+                    nextPacket->data[0] |= 0b00010000;
+                }
+
+                break;
+            case SPEEDMODE_28STEP:
+                //stick LSB of speed in C
+                nextPacket->data[0] |= (speed & 0x01) << 4;
+                break;
+        }
+        nextPacket->dataBytes = 1;
     }
-
-    //remove LSB and stick speed in lower nibble
-    nextPacket->data[0] |= (speed >> 1) & 0x0f;
-
-    //Speeds range from 2-16 (in 14speed step mode) and 2-28 in 28mode
-    switch (mode) {
-        case SPEEDMODE_14STEP:
-            //set C (LSB of speed) to be the direction to control the light
-            if (forwards) {
-                nextPacket->data[0] |= 0b00010000;
-            }
-
-            break;
-        case SPEEDMODE_28STEP:
-            //stick LSB of speed in C
-            nextPacket->data[0] |= (speed & 0x01) << 4;
-            break;
-    }
-    nextPacket->dataBytes = 1;
     nextPacket->longPreamble = false;
 }
 
@@ -261,7 +276,8 @@ void runDCCDemo(uint8_t address) {
                 //go forwards!
                 USART_Transmit('f');
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertSpeedPacket(address, 15, true, SPEEDMODE_14STEP);
+                    //insertSpeedPacket(address, 15, true, SPEEDMODE_14STEP);
+					insertSpeedPacket(address, 30, true, SPEEDMODE_128STEP);
                 }
                 break;
             case 3:
@@ -271,14 +287,14 @@ void runDCCDemo(uint8_t address) {
                 //stop
                 USART_Transmit('s');
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertSpeedPacket(address, 0, true, SPEEDMODE_14STEP);
+                    insertSpeedPacket(address, 0, true, SPEEDMODE_28STEP);
                 }
                 break;
             case 2:
                 //go backwards!
                 USART_Transmit('b');
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertSpeedPacket(address, 15, false, SPEEDMODE_14STEP);
+                    insertSpeedPacket(address, 30, false, SPEEDMODE_128STEP);
                 }
                 break;
         }

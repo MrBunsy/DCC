@@ -83,7 +83,8 @@ typedef enum baseStates {
 
 enum speedModes{
 	SPEEDMODE_14STEP,
-	SPEEDMODE_28STEP
+	SPEEDMODE_28STEP,
+	SPEEDMODE_128STEP
 	};
 
 #endif /* TRAINTEST_H_ */
