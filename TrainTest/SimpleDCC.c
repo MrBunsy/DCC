@@ -139,12 +139,34 @@ void simpleDCC_init() {
     }
 }
 
+
 /*
  * Returns true if we can enter service mode (the switch is toggled)
  */
 bool canEnterServiceMode() {
     //is the service mode pin low?
     return (Rdb(DCC_PIN, DCC_nSERVICE_PIN) == 0);
+}
+
+bool enterServiceMode(){
+	uint8_t i;
+	if(canEnterServiceMode()){
+		waitForSafeToInsert();
+		for (i = 0; i <5; i++) {
+			insertResetPacket(true);
+		}
+		operatingState=SERVICE_MODE;
+		return true;
+	}
+	return false;
+}
+
+void leaveServiceMode(){
+	operatingState=OPERATIONS_MODE;
+}
+
+bool isInServiceMode(){
+	return operatingState==SERVICE_MODE;
 }
 
 /*
@@ -161,8 +183,8 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     uint8_t i;
     dccPacket_t *packet;
 
-	waitForSafeToInsert();
-	
+    waitForSafeToInsert();
+
     //at least three reset packets with long preamble
     for (i = 0; i < 5; i++) {
         insertResetPacket(true);
@@ -188,7 +210,7 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     //    for (i = 0; i < 8; i++) {
     //        insertResetPacket(true);
     //    }
-    operatingState = SERVICE_MODE;
+    operatingState = LEAVE_SERVICE_MODE;
     return true;
 }
 
@@ -383,7 +405,6 @@ void setIdleLED() {
     Clrb(DCC_PORT, DCC_DATA_LED);
 }
 
-
 /*
  * The packet buffer has just run out, fill it with something depending on what state we're in
  */
@@ -396,7 +417,7 @@ void fillPacketBuffer() {
             setIdleLED();
             break;
         case LEAVE_SERVICE_MODE:
-		// TODO remove this
+            // TODO remove this
             //clear DCC output
             Clrb(DCC_PORT, DCC_OUT_PIN);
             Clrb(DCC_PORT, DCC_nOUT_PIN);
@@ -405,6 +426,9 @@ void fillPacketBuffer() {
             _delay_ms(500);
             operatingState = OPERATIONS_MODE;
             insertIdlePacket(false);
+            break;
+        case SERVICE_MODE:
+            insertResetPacket(true);
             break;
     }
 }

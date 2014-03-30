@@ -66,6 +66,7 @@ message_t readMessage(void) {
 void processInput() {
     while (true) {
         message_t message = readMessage();
+		dccPacket_t *packet;
         uint8_t i;
         USART_Transmit('r');
         switch (message.commandType) {
@@ -81,10 +82,30 @@ void processInput() {
                     insertLightsPacket(message.address, message.data.lightsMessageData.on);
                 }
                 break;
-                case COMMAND_EMERGENCY_STOP:
+            case COMMAND_EMERGENCY_STOP:
                 //needs testing
+                waitForSafeToInsert();
                 insertSpeedPacket(0, 1, false, SPEEDMODE_14STEP);
                 break;
+            case COMMAND_ENTER_SERVICE_MODE:
+                enterServiceMode();
+                
+                break;
+				case COMMAND_CUSTOM_PACKET:
+				waitForSafeToInsert();
+				for(i=0;i< message.data.customPacketMessageData.repeat;i++){
+					packet = getInsertPacketPointer();
+					//address is actually just the first data byte as far as DCC/JMRI is concerned, it's *normally* address which is why I called it hta to begin with
+					packet->address=message.address;
+					packet->dataBytes=message.data.customPacketMessageData.dataBytes;
+					//error detection should be generated same as JMRI's
+					//will this work?
+					//packet->data=message.data.customPacketMessageData.data;
+					memcpy(packet->data,message.data.customPacketMessageData.data,message.data.customPacketMessageData.dataBytes);
+					//TODO will this need to change?
+					packet->longPreamble=false;
+				}
+				break;
         }
     }
 }

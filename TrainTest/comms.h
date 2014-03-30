@@ -12,15 +12,17 @@
 #include "Include.h"
 #include "UART.h"
 #include "SimpleDCC.h"
+#include <string.h>
 
-#define MAX_MESSAGE_DATA_BYTES (MAX_DATA_BYTES)
+#define MAX_MESSAGE_DATA_BYTES (MAX_DATA_BYTES + 2)
 
 typedef enum {
     COMMAND_PROGRAMME_ADDRESS = 0, //go into service mode, send this new address, leave service mode
     COMMAND_SET_SPEED,
     COMMAND_ENABLE_LIGHTS,
     COMMAND_EMERGENCY_STOP,
-    COMMAND_CUSTOM_PACKET,//arbitrarily defined packet, this way JMRI can deal with all the implementation, not me :D
+    COMMAND_CUSTOM_PACKET, //arbitrarily defined packet, this way JMRI can deal with all the implementation, not me :D
+    COMMAND_ENTER_SERVICE_MODE,
 } commandType_t;
 
 #define SYNC_INT (0xffccccff)
@@ -38,7 +40,7 @@ typedef struct {
     bool forwards;
 } speedMessageData_t;
 
-typedef struct{
+typedef struct {
     bool on;
 } lightsMessageData_t;
 
@@ -46,14 +48,23 @@ typedef struct {
     uint8_t newAddress;
 } newAddressMessageData_t;
 
+typedef struct {
+	//jmri also sends the error correction byte - I could use this too? (would simplify my code a huge amount if JMRI did *all* the DCC encoding...)
+    uint8_t data[MAX_DATA_BYTES];
+	uint8_t dataBytes;
+    uint8_t repeat;
+} customPacketMessageData_t;
+
 typedef union {
     genericMessageData_t genericMessageData;
     speedMessageData_t speedMessageData;
     lightsMessageData_t lightsMessageData;
     newAddressMessageData_t newAddressMessageData;
+	customPacketMessageData_t customPacketMessageData;
 } messageDataUnion_t;
 
 //#pragma pack(1)
+
 typedef struct {
     //this will hold commandType_t
     uint8_t commandType;

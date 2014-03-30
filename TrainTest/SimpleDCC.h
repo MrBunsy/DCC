@@ -58,14 +58,6 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;
 
-void runDCCDemo(uint8_t address);
-void simpleDCC_init();
-bool setAddress(uint8_t newAddress);
-void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode);
-void insertLightsPacket(uint8_t address, bool on);
-bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
-void waitForSafeToInsert();
-
 /*
  * the information required for a packet.  From this a whole real packet can be generated
  */
@@ -76,6 +68,22 @@ typedef struct {
     uint8_t data[MAX_DATA_BYTES];
     //note that an error detection byte is a different type of data byte
 } dccPacket_t;
+
+void runDCCDemo(uint8_t address);
+void simpleDCC_init();
+bool setAddress(uint8_t newAddress);
+void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode);
+void insertLightsPacket(uint8_t address, bool on);
+void insertResetPacket(bool longPreamble);
+dccPacket_t *getInsertPacketPointer();
+bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
+void waitForSafeToInsert();
+
+bool isInServiceMode();
+void leaveServiceMode();
+bool enterServiceMode();
+
+
 
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
 
