@@ -23,7 +23,7 @@ enum dataTransmitStates {
     DATA_START_BIT,
     DATA,
     ERROR_START_BIT,
-    ERROR_DETECTION, //this and data will be interleaved if more than one data byte
+    ERROR_DETECTION,
     END_BIT
 };
 
@@ -161,7 +161,8 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     uint8_t i;
     dccPacket_t *packet;
 
-
+	waitForSafeToInsert();
+	
     //at least three reset packets with long preamble
     for (i = 0; i < 5; i++) {
         insertResetPacket(true);
@@ -394,7 +395,8 @@ void fillPacketBuffer() {
             insertIdlePacket(false);
             setIdleLED();
             break;
-        case SERVICE_MODE:
+        case LEAVE_SERVICE_MODE:
+		// TODO remove this
             //clear DCC output
             Clrb(DCC_PORT, DCC_OUT_PIN);
             Clrb(DCC_PORT, DCC_nOUT_PIN);

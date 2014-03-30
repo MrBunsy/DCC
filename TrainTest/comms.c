@@ -67,6 +67,7 @@ void processInput() {
     while (true) {
         message_t message = readMessage();
         uint8_t i;
+        USART_Transmit('r');
         switch (message.commandType) {
             case COMMAND_SET_SPEED:
                 waitForSafeToInsert();
@@ -79,6 +80,10 @@ void processInput() {
                 for (i = 0; i < DUPLICATION; i++) {
                     insertLightsPacket(message.address, message.data.lightsMessageData.on);
                 }
+                break;
+                case COMMAND_EMERGENCY_STOP:
+                //needs testing
+                insertSpeedPacket(0, 1, false, SPEEDMODE_14STEP);
                 break;
         }
     }
