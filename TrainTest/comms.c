@@ -93,17 +93,23 @@ void processInput() {
                 break;
 				case COMMAND_CUSTOM_PACKET:
 				waitForSafeToInsert();
-				for(i=0;i< message.data.customPacketMessageData.repeat;i++){
+				//for(i=0;i< message.data.customPacketMessageData.repeat;i++){
+				for(i=0;i< DUPLICATION;i++){
 					packet = getInsertPacketPointer();
 					//address is actually just the first data byte as far as DCC/JMRI is concerned, it's *normally* address which is why I called it hta to begin with
 					packet->address=message.address;
-					packet->dataBytes=message.data.customPacketMessageData.dataBytes;
+					//comms protocol is assumign that address is part of the data, so subtract one from this until internally
+					//address is subsumed into data
+					//also remove one because JMRI transmits the error detection packet, which *we* generate ourselves!
+					packet->dataBytes=message.data.customPacketMessageData.dataBytes-2;
 					//error detection should be generated same as JMRI's
 					//will this work?
 					//packet->data=message.data.customPacketMessageData.data;
 					memcpy(packet->data,message.data.customPacketMessageData.data,message.data.customPacketMessageData.dataBytes);
 					//TODO will this need to change?
 					packet->longPreamble=false;
+					
+					//insertSpeedPacket(message.address, 80, true, SPEEDMODE_128STEP);
 				}
 				break;
         }

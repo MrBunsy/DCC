@@ -68,10 +68,13 @@ typedef union {
 typedef struct {
     //this will hold commandType_t
     uint8_t commandType;
+	//usage TBD, intention being that braking packets will have priority over others, and similar
+	int8_t priority;
+	
     //dccPacket_t packet;//don't actually want both sides of the comms to have to implement full details of DCC
     uint8_t address;
-    //usage TBD, intention being that braking packets will have priority over others, and similar
-    int8_t priority;
+    //having data preceeded by address means that a COMMAND_CUSTOM_PACKET doesn't need to care that this system treats address seperate to the data
+	//in that a custom packet can be sent with commandType of COMMAND_CUSTOM_PACKET, then priority then the full data (where the first byte is usually address anyway)
     messageDataUnion_t data;
 } message_t;
 
