@@ -17,12 +17,13 @@
 #define MAX_MESSAGE_DATA_BYTES (MAX_DATA_BYTES + 2)
 
 typedef enum {
-    COMMAND_PROGRAMME_ADDRESS = 0, //go into service mode, send this new address, leave service mode
-    COMMAND_SET_SPEED,
-    COMMAND_ENABLE_LIGHTS,
-    COMMAND_EMERGENCY_STOP,
+//    COMMAND_PROGRAMME_ADDRESS = 0, //go into service mode, send this new address, leave service mode
+//    COMMAND_SET_SPEED,
+//    COMMAND_ENABLE_LIGHTS,
+//    COMMAND_EMERGENCY_STOP,
     COMMAND_CUSTOM_PACKET, //arbitrarily defined packet, this way JMRI can deal with all the implementation, not me :D
     COMMAND_ENTER_SERVICE_MODE,
+	COMMAND_LEAVE_SERVICE_MODE
 } commandType_t;
 
 #define SYNC_INT (0xffccccff)

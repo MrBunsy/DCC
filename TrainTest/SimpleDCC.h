@@ -62,7 +62,7 @@ volatile bool safeToInsert;
  * the information required for a packet.  From this a whole real packet can be generated
  */
 typedef struct {
-    bool longPreamble;
+    //bool longPreamble;
     uint8_t address;
     uint8_t dataBytes; //just the actual data bytes, we will work out the error detection byte at transmission time
     uint8_t data[MAX_DATA_BYTES];
@@ -74,7 +74,7 @@ void simpleDCC_init();
 bool setAddress(uint8_t newAddress);
 void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode);
 void insertLightsPacket(uint8_t address, bool on);
-void insertResetPacket(bool longPreamble);
+void insertResetPacket();
 dccPacket_t *getInsertPacketPointer();
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
 void waitForSafeToInsert();
@@ -82,6 +82,8 @@ void waitForSafeToInsert();
 bool isInServiceMode();
 void leaveServiceMode();
 bool enterServiceMode();
+void setServiceLED();
+void clearServiceLED();
 
 
 

@@ -77,23 +77,21 @@ dccPacket_t *getInsertPacketPointer() {
 /**
  * Insert an idle packet at the end of the packetbuffer
  */
-void insertIdlePacket(bool longPreamble) {
+void insertIdlePacket() {
     dccPacket_t *packet = getInsertPacketPointer();
     packet->address = 0xFF;
     packet->data[0] = 0x00;
     packet->dataBytes = 1;
-    packet->longPreamble = longPreamble;
 }
 
 /*
  * Insert a reset packet at the end of the packetbuffer
  */
-void insertResetPacket(bool longPreamble) {
+void insertResetPacket() {
     dccPacket_t *packet = getInsertPacketPointer();
     packet->address = 0x00;
     packet->data[0] = 0x00;
     packet->dataBytes = 1;
-    packet->longPreamble = longPreamble;
 }
 
 void simpleDCC_init() {
@@ -153,9 +151,10 @@ bool enterServiceMode(){
 	if(canEnterServiceMode()){
 		waitForSafeToInsert();
 		for (i = 0; i <5; i++) {
-			insertResetPacket(true);
+			insertResetPacket();
 		}
 		operatingState=SERVICE_MODE;
+		setServiceLED();
 		return true;
 	}
 	return false;
@@ -163,6 +162,7 @@ bool enterServiceMode(){
 
 void leaveServiceMode(){
 	operatingState=OPERATIONS_MODE;
+	clearServiceLED();
 }
 
 bool isInServiceMode(){
@@ -199,11 +199,13 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
         CC=11 Write byte
          */
         //01111100 = 7c
+		//CV as defined is 1 based, but the decoders all deal with zero based, for some reason.  This is in the spec.
+		cv--;
+		
         packet->address = 0b01111100 | ((cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
         packet->data[0] = cv & 0xff; //lowest 8 bits of cv
         packet->data[1] = newValue;
         packet->dataBytes = 2;
-        packet->longPreamble = true;
     }
 
     //at least 6 reset packets
@@ -215,7 +217,7 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 }
 
 bool setAddress(uint8_t newAddress) {
-    return setCVwithDirectMode(0, newAddress);
+    return setCVwithDirectMode(1, newAddress);
 }
 
 /*
@@ -237,7 +239,6 @@ void insertLightsPacket(uint8_t address, bool on) {
         nextPacket->data[0] |= 0b10010000;
     }
     nextPacket->dataBytes = 1;
-    nextPacket->longPreamble = false;
 }
 
 /*
@@ -288,7 +289,6 @@ void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mo
         }
         nextPacket->dataBytes = 1;
     }
-    nextPacket->longPreamble = false;
 }
 
 /*
@@ -389,19 +389,23 @@ dccPacket_t *getCurrentPacket() {
 
 void setDataLED() {
     Setb(DCC_PORT, DCC_DATA_LED);
-    Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
+//    Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_IDLE_LED);
 }
 
 void setServiceLED() {
     Setb(DCC_PORT, DCC_SERVICE_MODE_LED);
-    Clrb(DCC_PORT, DCC_DATA_LED);
-    Clrb(DCC_PORT, DCC_IDLE_LED);
+//    Clrb(DCC_PORT, DCC_DATA_LED);
+//    Clrb(DCC_PORT, DCC_IDLE_LED);
+}
+
+void clearServiceLED(){
+	Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
 }
 
 void setIdleLED() {
     Setb(DCC_PORT, DCC_IDLE_LED);
-    Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
+//    Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_DATA_LED);
 }
 
@@ -416,17 +420,17 @@ void fillPacketBuffer() {
             insertIdlePacket(false);
             setIdleLED();
             break;
-        case LEAVE_SERVICE_MODE:
-            // TODO remove this
-            //clear DCC output
-            Clrb(DCC_PORT, DCC_OUT_PIN);
-            Clrb(DCC_PORT, DCC_nOUT_PIN);
-            //leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
-            //we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
-            _delay_ms(500);
-            operatingState = OPERATIONS_MODE;
-            insertIdlePacket(false);
-            break;
+            //        case LEAVE_SERVICE_MODE:
+            //            // TODO remove this
+            //            //clear DCC output
+            //            Clrb(DCC_PORT, DCC_OUT_PIN);
+            //            Clrb(DCC_PORT, DCC_nOUT_PIN);
+            //            //leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
+            //            //we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
+            //            _delay_ms(500);
+            //            operatingState = OPERATIONS_MODE;
+            //            insertIdlePacket(false);
+            //            break;
         case SERVICE_MODE:
             insertResetPacket(true);
             break;
@@ -457,7 +461,7 @@ uint8_t determineNextBit() {
             safeToInsert = true;
             transmittedBits++;
             //long preamble is for service mode packets
-            if (transmittedBits >= (currentPacket->longPreamble ? LONG_PREAMBLE_LENGTH : PREAMBLE_LENGTH)) {
+            if (transmittedBits >= (operatingState == SERVICE_MODE ? LONG_PREAMBLE_LENGTH : PREAMBLE_LENGTH)) {
                 //this is the last bit of the preamble
                 transmitPacketState = PACKET_START_BIT;
             }
@@ -570,9 +574,10 @@ uint8_t determineNextBit() {
                 transmittingPacket %= PACKET_BUFFER_SIZE;
 
                 //detect what the next packet type is and set LED accordingly
-                if (packetBuffer[transmittingPacket].longPreamble) {
-                    setServiceLED();
-                } else if (packetBuffer[transmittingPacket].address == 0xff) {
+                //if (packetBuffer[transmittingPacket].longPreamble) {
+                //    setServiceLED();
+                //} else
+				 if (packetBuffer[transmittingPacket].address == 0xff) {
                     //idle packet
                     setIdleLED();
                 } else {
