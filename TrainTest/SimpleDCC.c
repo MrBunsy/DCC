@@ -200,6 +200,9 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
         CC=01 Verify byte
         CC=11 Write byte
          */
+		//cv '1' is actually cv 0
+		cv--;
+		
         //01111100 = 7c
         packet->address = 0b01111100 | ((cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
         packet->data[0] = cv & 0xff; //lowest 8 bits of cv
