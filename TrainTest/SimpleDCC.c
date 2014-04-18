@@ -173,6 +173,8 @@ bool isInServiceMode(){
  * direct mode service mode to set the address CV
  *
  * returns false if unsuccessful (although atm this will only happen if we can't enter service mode due to mech switch)
+ *
+ * cv is 10bits
  */
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     //don't allow this unless we can enter service mode
@@ -210,6 +212,8 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     //    for (i = 0; i < 8; i++) {
     //        insertResetPacket(true);
     //    }
+	
+	//a bit of a hack that will result in the power to the track being cut off briefly:
     operatingState = LEAVE_SERVICE_MODE;
     return true;
 }

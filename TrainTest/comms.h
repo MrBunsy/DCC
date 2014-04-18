@@ -17,14 +17,15 @@
 #define MAX_MESSAGE_DATA_BYTES (MAX_DATA_BYTES + 2)
 
 typedef enum {
-    COMMAND_PROGRAMME_ADDRESS = 0, //go into service mode, send this new address, leave service mode
+    COMMAND_PROGRAMME_DIRECT_BYTE = 0, //go into service mode, send this new address, leave service mode
+	COMMAND_OPERATIONS_MODE_PACKET, //arbitrarily defined packet, this way JMRI can deal with all the implementation, not me :D
     COMMAND_SET_SPEED,
     COMMAND_ENABLE_LIGHTS,
     COMMAND_EMERGENCY_STOP,
-    COMMAND_CUSTOM_PACKET, //arbitrarily defined packet, this way JMRI can deal with all the implementation, not me :D
     COMMAND_ENTER_SERVICE_MODE,
 } commandType_t;
 
+//used for finding the start of a packet:
 #define SYNC_INT (0xffccccff)
 #define NUM_SYNC_BYTES (4)
 
@@ -53,14 +54,20 @@ typedef struct {
     uint8_t data[MAX_DATA_BYTES];
 	uint8_t dataBytes;
     uint8_t repeat;
-} customPacketMessageData_t;
+} opsModePacketMessageData_t;
+
+typedef struct{
+	uint16_t cv;
+	uint8_t newValue;
+	} programmeDirectByteMessageData_t;
 
 typedef union {
     genericMessageData_t genericMessageData;
     speedMessageData_t speedMessageData;
     lightsMessageData_t lightsMessageData;
     newAddressMessageData_t newAddressMessageData;
-	customPacketMessageData_t customPacketMessageData;
+	opsModePacketMessageData_t opsModePacketMessageData;
+	programmeDirectByteMessageData_t programmeDirectByteMessageData;
 } messageDataUnion_t;
 
 //#pragma pack(1)
