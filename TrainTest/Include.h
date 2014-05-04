@@ -24,4 +24,11 @@
 #define Rdb(pinp,bitnum)		(pinp & _BV(bitnum))
 #define Invert(port,bitnum)		(port) ^= _BV(bitnum)
 
+#define  ATMEGA168      0
+#define  ATMEGA644		1
+
+#define  PROCESSOR     ATMEGA168
+
+
+
 #endif /* INCLUDE_H_ */

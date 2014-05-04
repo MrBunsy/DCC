@@ -15,27 +15,46 @@
 
 #include "UART.h"
 
-
-//port registers for the DCC pins
-#define DCC_PORT PORTA
-#define DCC_DIRECTION DDRA
-#define DCC_PIN PINA
-//service mode switch pin (input, active low)
-#define DCC_nSERVICE_PIN PINA0
-#define DCC_SERVICE_PULLUP PORTA0
-//LEDs
-#define DCC_DATA_LED PORTA1
-#define DCC_SERVICE_MODE_LED PORTA2
-#define DCC_IDLE_LED PORTA3
-//DCC and nDCC pins
-#define DCC_OUT_PIN PORTA6
-#define DCC_nOUT_PIN PORTA7
-
+#if (PROCESSOR == ATMEGA644) 
+	//port registers for the DCC pins
+	#define DCC_PORT PORTA
+	#define DCC_DIRECTION DDRA
+	#define DCC_PIN PINA
+	//service mode switch pin (input, active low)
+	#define DCC_nSERVICE_PIN PINA0
+	#define DCC_SERVICE_PULLUP PORTA0
+	//LEDs
+	#define DCC_DATA_LED PORTA1
+	#define DCC_SERVICE_MODE_LED PORTA2
+	#define DCC_IDLE_LED PORTA3
+	//DCC and nDCC pins
+	#define DCC_OUT_PIN PORTA6
+	#define DCC_nOUT_PIN PORTA7
+#elif (PROCESSOR == ATMEGA168)
+	//port registers for the DCC pins
+	#define DCC_PORT PORTC
+	#define DCC_DIRECTION DDRC
+	#define DCC_PIN PINC
+	//service mode switch pin (input, active low)
+	#define DCC_nSERVICE_PIN PINC5
+	#define DCC_SERVICE_PULLUP PORTC5
+	//LEDs
+	#define DCC_DATA_LED PORTC4
+	#define DCC_SERVICE_MODE_LED PORTC3
+	#define DCC_IDLE_LED PORTC2
+	//DCC and nDCC pins
+	#define DCC_OUT_PIN PORTC1
+	#define DCC_nOUT_PIN PORTC0
+#endif
 
 
 #define USE_DCC_TIMINGS
-
-#define PACKET_BUFFER_SIZE (128)
+#if (PROCESSOR == ATMEGA644) 
+	#define PACKET_BUFFER_SIZE (128)
+#elif (PROCESSOR == ATMEGA168)
+//not enough RAM!
+	#define PACKET_BUFFER_SIZE (64)
+#endif
 /*
 While the baseline packet has a length of 3 data bytes separated by a "0" bit, a packet using the extended
 packet format definition may have a length of between 3 and 6 data bytes each separated by a "0" bit.

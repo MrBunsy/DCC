@@ -18,8 +18,10 @@ uint16_t debug;
 void USART_Init(uint32_t baud) {
 
     uint16_t ubrr = (uint16_t) ((uint32_t) (F_CPU / (16 * baud) -1));
+#if (PROCESSOR == ATMEGA644) 
     //enable clock to UART0
     Clrb(PRR0, PRUSART0);
+#endif
     /* Set baud rate */
     UBRR0H = (uint8_t) (ubrr >> 8);
     UBRR0L = (uint8_t) ubrr;
