@@ -16,7 +16,7 @@
 #define MAX_MESSAGE_DATA_BYTES MAX_DATA_BYTES
 
 typedef enum {
-    COMMAND_PROGRAMME_ADDRESS=0, //go into service mode, send this new address, leave service mode
+    COMMAND_PROGRAMME_ADDRESS = 0, //go into service mode, send this new address, leave service mode
     COMMAND_SET_SPEED,
     COMMAND_ENABLE_LIGHTS
 } commandType_t;
@@ -36,6 +36,10 @@ typedef struct {
     bool forwards;
 } speedMessageData_t;
 
+typedef struct{
+    bool on;
+} lightsMessageData_t;
+
 typedef struct {
     uint8_t newAddress;
 } newAddressMessageData_t;
@@ -43,9 +47,11 @@ typedef struct {
 typedef union {
     genericMessageData_t genericMessageData;
     speedMessageData_t speedMessageData;
+    lightsMessageData_t lightsMessageData;
     newAddressMessageData_t newAddressMessageData;
 } messageDataUnion_t;
 
+//#pragma pack(1)
 typedef struct {
     //this will hold commandType_t
     uint8_t commandType;

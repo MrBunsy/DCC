@@ -11,7 +11,7 @@
 
 
 #include "Include.h"
-
+#include "SimpleDCC.h"
 
 void USART_Init(uint32_t baud);
 uint8_t USART_Receive(void) ;
