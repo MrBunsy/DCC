@@ -19,11 +19,13 @@ public class SpeedMessage extends Message{
         super(train,0);
         this.forwards=forwards;
         this.speed=speed;
+        this.messageType = messageType.SET_SPEED;
     }
     
+    @Override
     public ByteBuffer getByteBuffer(){
         
-        ByteBuffer bb = getHeader(SET_SPEED);
+        ByteBuffer bb = getHeader();
         
         bb.put((byte)(this.speed & 0xff));
         bb.put((byte)(this.forwards ? 1 : 0));

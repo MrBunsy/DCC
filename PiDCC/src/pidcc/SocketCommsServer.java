@@ -88,6 +88,7 @@ public class SocketCommsServer {
                 int bytesRead;
                 while ((bytesRead = streamIn.read(buffer)) != -1 && running) {
                     streamOut.write(buffer, 0, bytesRead);
+                    streamOut.flush();
                 }
             } catch (IOException ex) {
                 System.out.println(ex.getMessage());

@@ -79,17 +79,17 @@ public class PiDCC {
         LightsMessage lights = new LightsMessage(train, true);
         while (true) {
             try {
-                Thread.sleep(1500);
+                Thread.sleep(3000);
                 comms.sendMessage(lights);
                 
-                SpeedMessage s = new SpeedMessage(train, true, 100);
+                SpeedMessage s = new SpeedMessage(train, true, 120);
                 comms.sendMessage(s);
 
                 Thread.sleep(1500);
                 s = new SpeedMessage(train, true, 0);
                 comms.sendMessage(s);
 
-                Thread.sleep(1500);
+                Thread.sleep(3000);
                 s = new SpeedMessage(train, false, 80);
                 comms.sendMessage(s);
 
