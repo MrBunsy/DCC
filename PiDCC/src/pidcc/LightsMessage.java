@@ -17,10 +17,12 @@ public class LightsMessage extends Message{
     public LightsMessage(Train train, boolean on) {
         super(train, 0);
         this.on=on;
+        this.messageType=MessageType.ENABLE_LIGHTS;
     }
     
+    @Override
     public ByteBuffer getByteBuffer(){
-        ByteBuffer bb = getHeader(ENABLE_LIGHTS);
+        ByteBuffer bb = getHeader();
         
         bb.put((byte)(on ? 0x1 : 0x0));
         

@@ -15,9 +15,31 @@ import java.nio.channels.WritableByteChannel;
  */
 public class Message {
 
-    public static int MESSAGE_SIZE = (8+4), PROGRAMME_ADDRESS = 0, SET_SPEED = 1, ENABLE_LIGHTS = 2;
+    public static int MESSAGE_SIZE = (8+4), MAX_PRIORITY=255;
     
-    public static long SYNC_INT = 0xffccaaff;
+    public static Train BROADCAST_TRAIN = new Train(0);
+    
+    
+    
+    public enum MessageType{
+        PROGRAMME_ADDRESS (0),
+        SET_SPEED (1),
+        ENABLE_LIGHTS (2),
+        EMERGANCY_STOP (3);
+        
+        private final int id;
+        
+        MessageType(int id){
+            this.id=id;
+        }
+        
+        int id(){
+            return this.id;
+        }
+    }
+    
+    public MessageType messageType;
+    
     protected Train train;
     protected int priority;
 
@@ -26,20 +48,20 @@ public class Message {
         this.priority = priority;
     }
 
-    public ByteBuffer getHeader( int messageType) {
+    public ByteBuffer getHeader() {
         ByteBuffer b=  ByteBuffer.allocate(MESSAGE_SIZE);
         //sync bytes
-        //b.putInt((int)(SYNC_INT) & 0xffffffff);
         b.put((byte)0xff);
         b.put((byte)0xcc);
         b.put((byte)0xcc);
         b.put((byte)0xff);
         //message type byte
-        b.put((byte)(messageType & 0xff));
-        //address byte
-        b.put((byte) (train.getAddress() & 0xff));
+        b.put((byte)(messageType.id() & 0xff));
         //priority byte
         b.put((byte) (priority & 0xff));
+        //address byte
+        b.put((byte) (train.getAddress() & 0xff));
+        
         
         return b;
     }

@@ -75,7 +75,7 @@ public class SocketCommsClient implements CommLink{
 
     @Override
     public void receivedMessage(byte[] bytes, int len) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        System.out.print(new String(bytes, 0, len));
     }
     
     
