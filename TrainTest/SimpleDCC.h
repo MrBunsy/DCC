@@ -48,6 +48,13 @@
 #endif
 
 
+#ifdef SECOND_DATA_LED
+	//little hack to support a second LED on a new board before the small coloured LEDs arrive
+	#define DEBUG_LED_PORT	PORTB
+	#define DEBUG_LED	PORTB1
+	#define DEBUG_LED_DIR	DDRB
+#endif
+
 #define USE_DCC_TIMINGS
 #if (PROCESSOR == ATMEGA644) 
 	#define PACKET_BUFFER_SIZE (128)

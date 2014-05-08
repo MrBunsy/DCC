@@ -29,6 +29,8 @@
 
 #define  PROCESSOR     ATMEGA168
 
+//temporarily only one LED on the board
+#define SECOND_DATA_LED
 
 
 #endif /* INCLUDE_H_ */

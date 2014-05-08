@@ -104,6 +104,10 @@ void simpleDCC_init() {
     Setb(DCC_DIRECTION, DCC_SERVICE_MODE_LED);
     Setb(DCC_DIRECTION, DCC_DATA_LED);
 
+#ifdef SECOND_DATA_LED
+	Setb(DEBUG_LED_DIR, DEBUG_LED);
+#endif
+
     //set service mode switch pin to input
     Clrb(DCC_DIRECTION, DCC_nSERVICE_PIN);
 
@@ -398,6 +402,9 @@ void setDataLED() {
     Setb(DCC_PORT, DCC_DATA_LED);
     Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_IDLE_LED);
+#ifdef SECOND_DATA_LED
+	Setb(DEBUG_LED_PORT, DEBUG_LED);
+#endif
 }
 
 void setServiceLED() {
@@ -410,6 +417,9 @@ void setIdleLED() {
     Setb(DCC_PORT, DCC_IDLE_LED);
     Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_DATA_LED);
+#ifdef SECOND_DATA_LED
+	Clrb(DEBUG_LED_PORT, DEBUG_LED);
+#endif
 }
 
 /*
