@@ -81,6 +81,9 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 //if running DC test, how long between switching modes
 #define DC_DELAY (1000)
 
+//if defined, service mode will always be available, regardless of if the service_mode_pin is pulled low
+#define OVERRIDE_SERVICE_MODE_PIN
+
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;
 
@@ -109,7 +112,9 @@ bool isInServiceMode();
 void leaveServiceMode();
 bool enterServiceMode();
 
-
+void setServiceLED();
+void setDataLED();
+void setIdleLED();
 
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
 
