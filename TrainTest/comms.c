@@ -77,6 +77,9 @@ void processInput() {
 				*/
                 setCVwithDirectMode(message.data.programmeDirectByteMessageData.cv, message.data.programmeDirectByteMessageData.newValue);
                 break;
+			case COMMAND_PROGRAMME_ADDRESS:
+				setAddress(message.data.newAddressMessageData.newAddress);
+				break;
             case COMMAND_OPERATIONS_MODE_PACKET:
                 waitForSafeToInsert();
                 for (i = 0; i < message.data.opsModePacketMessageData.repeat; i++) {

@@ -56,7 +56,7 @@ int main(void) {
 
     //set up UART
     USART_Init(BAUDRATE);
-	//setAddress(6);
+	//setAddress(8);
 #ifdef DCC_DEMO
 	//setAddress(5);
     runDCCDemo(5);

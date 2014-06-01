@@ -283,6 +283,9 @@ bool setAddress(uint8_t newAddress) {
     //return setCVwithDirectMode(1, newAddress);
 	uint8_t i;
 	dccPacket_t *packet;
+	
+	waitForSafeToInsert();
+	
 	//3 or more Reset Packets
 	for (i = 0; i < 5; i++) {
 		insertResetPacket(true);
