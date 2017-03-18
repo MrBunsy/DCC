@@ -139,7 +139,7 @@ public class PiDCC {
 
         CmdLineParser parser = new CmdLineParser();
 
-        Option serialOption = parser.addIntegerOption('s', "serial");
+        Option serialOption = parser.addStringOption('s', "serial");
         Option demoModeOption = parser.addBooleanOption('d', "demo");
         Option addressOption = parser.addIntegerOption('a', "address");
         Option serverOption = parser.addBooleanOption('s', "server");
