@@ -30,6 +30,8 @@
 	//DCC and nDCC pins
 	#define DCC_OUT_PIN PORTA6
 	#define DCC_nOUT_PIN PORTA7
+	//current sense input for ADC
+	#define CURRENT_SENSE_ADC_IN ADC5_BIT
 #elif (PROCESSOR == ATMEGA168)
 	//port registers for the DCC pins
 	#define DCC_PORT PORTC
@@ -48,12 +50,20 @@
 #endif
 
 
+#ifdef SECOND_DATA_LED
+	//little hack to support a second LED on a new board before the small coloured LEDs arrive
+	#define DEBUG_LED_PORT	PORTB
+	#define DEBUG_LED	PORTB1
+	#define DEBUG_LED_DIR	DDRB
+#endif
+
 #define USE_DCC_TIMINGS
+//buffer needs to be at least 50 to hold all the initialisation packets
 #if (PROCESSOR == ATMEGA644) 
 	#define PACKET_BUFFER_SIZE (128)
 #elif (PROCESSOR == ATMEGA168)
 //not enough RAM!
-	#define PACKET_BUFFER_SIZE (64)
+	#define PACKET_BUFFER_SIZE (100)
 #endif
 /*
 While the baseline packet has a length of 3 data bytes separated by a "0" bit, a packet using the extended
@@ -73,6 +83,9 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 
 //if running DC test, how long between switching modes
 #define DC_DELAY (1000)
+
+//if defined, service mode will always be available, regardless of if the service_mode_pin is pulled low
+#define OVERRIDE_SERVICE_MODE_PIN
 
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;
@@ -102,7 +115,9 @@ bool isInServiceMode();
 void leaveServiceMode();
 bool enterServiceMode();
 
-
+void setServiceLED();
+void setDataLED();
+void setIdleLED();
 
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
 

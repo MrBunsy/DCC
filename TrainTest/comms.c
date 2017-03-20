@@ -77,9 +77,13 @@ void processInput() {
 				*/
                 setCVwithDirectMode(message.data.programmeDirectByteMessageData.cv, message.data.programmeDirectByteMessageData.newValue);
                 break;
+			case COMMAND_PROGRAMME_ADDRESS:
+				setAddress(message.data.newAddressMessageData.newAddress);
+				break;
             case COMMAND_OPERATIONS_MODE_PACKET:
-                waitForSafeToInsert();
+                
                 for (i = 0; i < message.data.opsModePacketMessageData.repeat; i++) {
+					waitForSafeToInsert();
                     //for(i=0;i< DUPLICATION;i++){
                     packet = getInsertPacketPointer();
                     //address is actually just the first data byte as far as DCC/JMRI is concerned, it's *normally* address which is why I called it hta to begin with
