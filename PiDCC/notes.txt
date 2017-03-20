@@ -3,3 +3,5 @@ sudo apt-get install librxtx-java
 java -Djava.library.path=/usr/lib/jni -Dgnu.io.rxtx.SerialPorts=/dev/ttyAMA0 -jar PiDCC.jar --serial /dev/ttyAMA0
 
 (http://angryelectron.com/rxtx-on-raspbian/)
+
+java -Djava.library.path=/usr/lib/jni -Dgnu.io.rxtx.SerialPorts=/dev/ttyAMA0 -jar PiDCC.jar --serial /dev/ttyAMA0 -s

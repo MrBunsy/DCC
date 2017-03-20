@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -69,11 +70,18 @@ public class SocketCommsServer {
         private OutputStream streamOut;
         private SocketCommsServer server;
         private boolean running;
+        private boolean printAscii;
 
-        public LinkStreams(InputStream streamIn, OutputStream streamOut, SocketCommsServer server) {
+        public LinkStreams(InputStream streamIn, OutputStream streamOut, SocketCommsServer server, boolean printAscii) {
             this.streamIn = streamIn;
             this.streamOut = streamOut;
             this.server = server;
+            this.printAscii = printAscii;
+        }
+        
+        public LinkStreams(InputStream streamIn, OutputStream streamOut, SocketCommsServer server)
+        {
+            this(streamIn, streamOut, server, false);
         }
 
         public void stop() {
@@ -89,6 +97,10 @@ public class SocketCommsServer {
                 while ((bytesRead = streamIn.read(buffer)) != -1 && running) {
                     streamOut.write(buffer, 0, bytesRead);
                     streamOut.flush();
+                    if (this.printAscii){
+                        byte[] slice = Arrays.copyOfRange(buffer, 0, bytesRead);
+                        System.out.print(new String(slice));
+                    }
                 }
             } catch (IOException ex) {
                 System.out.println(ex.getMessage());
