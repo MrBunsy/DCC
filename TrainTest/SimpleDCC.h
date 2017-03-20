@@ -15,6 +15,8 @@
 
 #include "UART.h"
 
+#include "ADC.h"
+
 #if (PROCESSOR == ATMEGA644) 
 	//port registers for the DCC pins
 	#define DCC_PORT PORTA
@@ -49,6 +51,9 @@
 	#define DCC_nOUT_PIN PORTC0
 #endif
 
+
+//ADC reads 0-255, which maps to 0-Vcc. Assuming a 10ohm sense resistor, MAX_CURRENT should be 0.1*current_in_amps*255/Vcc
+#define MAX_CURRENT (10)//10 is about 2amps
 
 #ifdef SECOND_DATA_LED
 	//little hack to support a second LED on a new board before the small coloured LEDs arrive
@@ -90,6 +95,9 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;
 
+//true if too much current has been drawn
+volatile bool highCurrentDraw;
+
 /*
  * the information required for a packet.  From this a whole real packet can be generated
  */
@@ -110,6 +118,7 @@ void insertResetPacket(bool longPreamble);
 dccPacket_t *getInsertPacketPointer();
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
 void waitForSafeToInsert();
+void emergancyCutPower();
 
 bool isInServiceMode();
 void leaveServiceMode();

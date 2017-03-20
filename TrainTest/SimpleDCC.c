@@ -486,21 +486,31 @@ void runDCCDemo(uint8_t address) {
  */
 void DC_Test() {
     while (1) {
+		
         _delay_ms(DC_DELAY);
         Clrb(DCC_PORT, DCC_OUT_PIN);
         Setb(DCC_PORT, DCC_nOUT_PIN);
-
-        _delay_ms(DC_DELAY);
+		
+		printADCValue();
+		
+		_delay_ms(DC_DELAY);
         Setb(DCC_PORT, DCC_OUT_PIN);
         Setb(DCC_PORT, DCC_nOUT_PIN);
+
+		printADCValue();
 
         _delay_ms(DC_DELAY);
         Setb(DCC_PORT, DCC_OUT_PIN);
         Clrb(DCC_PORT, DCC_nOUT_PIN);
 
+		printADCValue();
+
         _delay_ms(DC_DELAY);
         Setb(DCC_PORT, DCC_OUT_PIN);
         Setb(DCC_PORT, DCC_nOUT_PIN);
+		
+		printADCValue();
+		
     }
 }
 
@@ -723,12 +733,24 @@ uint8_t determineNextBit() {
     }
 
 }
+/************************************************************************/
+/* cut all high power outputs in a hurry                                */
+/************************************************************************/
+void emergancyCutPower(){
+	Clrb(DCC_PORT, DCC_OUT_PIN);
+	Clrb(DCC_PORT, DCC_nOUT_PIN);
+}
 
 /************************************************************************/
 /* Interrupt which is run every 58us                                    */
-
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
+	if (ADCH > MAX_CURRENT || highCurrentDraw){
+		highCurrentDraw = true;
+		emergancyCutPower();
+		USART_Transmit("h");
+		return;
+	}
 
     //output the right bit
     switch (bitState) {
@@ -775,5 +797,9 @@ ISR(TIMER0_COMPA_vect) {
 			#endif
             break;
     }
-
+	//currentCheckCount++;
+	//if(currentCheckCount==0){
+	//	//TODO put this in an interrupt, or elsewhere
+	//	printADCValue();
+	//}
 }
