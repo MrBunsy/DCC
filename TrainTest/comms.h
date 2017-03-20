@@ -19,6 +19,7 @@
 typedef enum {
     COMMAND_PROGRAMME_DIRECT_BYTE = 0, //go into service mode, send this new address, leave service mode
 	COMMAND_OPERATIONS_MODE_PACKET, //arbitrarily defined packet, this way JMRI can deal with all the implementation, not me :D
+	COMMAND_PROGRAMME_ADDRESS,
     COMMAND_SET_SPEED,
     COMMAND_ENABLE_LIGHTS,
     COMMAND_EMERGENCY_STOP,

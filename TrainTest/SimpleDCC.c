@@ -41,9 +41,10 @@ volatile uint8_t transmittingDataByte;
 //build up the error detection byte as we transmit
 volatile uint8_t errorDetectionByte;
 
+#ifdef DEBUG_MEMORY
 volatile uint8_t debugMemory[128];
 volatile uint16_t debugPosition = 0;
-
+#endif
 /**
  * 
 The different states which are cycled through when transmitting data
@@ -96,6 +97,41 @@ void insertResetPacket(bool longPreamble) {
     packet->longPreamble = longPreamble;
 }
 
+/*
+ * Insert a page preset packet at the end of the packetbuffer
+ */
+void insertPagePresetPacket(bool longPreamble) {
+    dccPacket_t *packet = getInsertPacketPointer();
+    packet->address = 0b01111101;
+    packet->data[0] = 0b00000001;
+    packet->dataBytes = 1;
+    packet->longPreamble = longPreamble;
+}
+
+/*
+ * Run commands required as per spec to start operations mode
+ */
+void enterOperationsMode(){
+	
+	 operatingState = OPERATIONS_MODE;
+	 transmittingPacket = 0;
+	 packetsInBuffer = 0;
+	
+	int i;
+	for (i = 0; i < 20; i++) {
+		insertResetPacket(false);
+	}
+
+	for (i = 0; i < 10; i++) {
+		insertIdlePacket(false);
+	}
+
+	//ready to go straight into service mode - NOT REQUIRED
+	for (i = 0; i < 20; i++) {
+		insertIdlePacket(false);
+	}
+}
+
 void simpleDCC_init() {
     //set DCC pins to output
     Setb(DCC_DIRECTION, DCC_OUT_PIN);
@@ -103,6 +139,10 @@ void simpleDCC_init() {
     Setb(DCC_DIRECTION, DCC_IDLE_LED);
     Setb(DCC_DIRECTION, DCC_SERVICE_MODE_LED);
     Setb(DCC_DIRECTION, DCC_DATA_LED);
+
+#ifdef SECOND_DATA_LED
+	Setb(DEBUG_LED_DIR, DEBUG_LED);
+#endif
 
     //set service mode switch pin to input
     Clrb(DCC_DIRECTION, DCC_nSERVICE_PIN);
@@ -121,22 +161,27 @@ void simpleDCC_init() {
          - RP-9.2.4 DCC Fail Safe
      */
 
-    operatingState = OPERATIONS_MODE;
-    transmittingPacket = 0;
-    packetsInBuffer = 0;
-    int i;
-    for (i = 0; i < 20; i++) {
-        insertResetPacket(false);
-    }
+   
+    
+	 operatingState = OPERATIONS_MODE;
+	 transmittingPacket = 0;
+	 packetsInBuffer = 0;
+	 
+	 int i;
+	 for (i = 0; i < 20; i++) {
+		 insertResetPacket(false);
+	 }
 
-    for (i = 0; i < 10; i++) {
-        insertIdlePacket(false);
-    }
+	 for (i = 0; i < 10; i++) {
+		 insertIdlePacket(false);
+	 }
 
-    //ready to go straight into service mode - NOT REQUIRED
-    for (i = 0; i < 20; i++) {
-        insertIdlePacket(false);
-    }
+	 //ready to go straight into service mode - NOT REQUIRED
+	 for (i = 0; i < 20; i++) {
+		 insertIdlePacket(false);
+	 }
+	
+	//setCVwithDirectMode(1,6);
 }
 
 
@@ -145,6 +190,9 @@ void simpleDCC_init() {
  */
 bool canEnterServiceMode() {
     //is the service mode pin low?
+	#ifdef OVERRIDE_SERVICE_MODE_PIN
+	return true;
+	#endif
     return (Rdb(DCC_PIN, DCC_nSERVICE_PIN) == 0);
 }
 
@@ -181,6 +229,14 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     if (!canEnterServiceMode()) {
         return false;
     }
+	/*_delay_ms(500);
+	setDataLED();
+	_delay_ms(500);
+	setIdleLED();
+	_delay_ms(500);
+	setDataLED();
+	_delay_ms(500);
+	setIdleLED();*/
 
     uint8_t i;
     dccPacket_t *packet;
@@ -188,7 +244,7 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     waitForSafeToInsert();
 
     //at least three reset packets with long preamble
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < 10; i++) {//formerlly 5
         insertResetPacket(true);
     }
 
@@ -212,17 +268,76 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
     }
 
     //at least 6 reset packets
-    //    for (i = 0; i < 8; i++) {
-    //        insertResetPacket(true);
-    //    }
+        for (i = 0; i < 16; i++) {//was 8
+            insertResetPacket(true);
+        }
 	
 	//a bit of a hack that will result in the power to the track being cut off briefly:
     operatingState = LEAVE_SERVICE_MODE;
     return true;
 }
 
+/*
+* Use address-only mode to set an address
+*/
 bool setAddress(uint8_t newAddress) {
-    return setCVwithDirectMode(0, newAddress);
+    //return setCVwithDirectMode(1, newAddress);
+	uint8_t i;
+	dccPacket_t *packet;
+	
+	waitForSafeToInsert();
+	
+	//3 or more Reset Packets
+	for (i = 0; i < 5; i++) {
+		insertResetPacket(true);
+	}
+	
+	//5 or more Page-Preset-packets
+	for (i = 0; i < 10; i++) {
+		insertPagePresetPacket(true);
+	}
+	
+	//6 or more Page Preset or Reset packets (Decoder-Recovery-Time from write to Page Register)
+	for (i = 0; i < 9; i++) {
+		insertResetPacket(true);
+	}
+	
+	//Optional Power Off Followed by Power-On-Cycle
+	
+	//3 or more Reset Packets
+	for (i = 0; i < 5; i++) {
+		insertResetPacket(true);
+	}
+	
+	//or 5 or more Writes to CV #1
+	 for (i = 0; i < 10; i++) {
+        packet = getInsertPacketPointer();
+		
+        /*
+	Instructions packets using Address-Only Mode are 3 byte packets of the format:
+	long-preamble 0 0111C000 0 0DDDDDDD 0 EEEEEEEE 1
+	
+	c=0 for verify
+	c=1 for write
+
+	*/
+        packet->address = 0b01111000;
+        packet->data[0] = newAddress & 0b01111111;
+        packet->dataBytes = 1;
+        packet->longPreamble = true;
+    }
+	
+	//10 or more identical Write or Reset packets (Decoder-Recovery-Time
+	for (i = 0; i < 15; i++) {
+		insertResetPacket(true);
+	}
+	
+	//Optional Power Off
+	//a bit of a hack that will result in the power to the track being cut off briefly:
+	operatingState = LEAVE_SERVICE_MODE;
+	return true;
+	
+	
 }
 
 /*
@@ -306,6 +421,8 @@ void waitForSafeToInsert() {
     while (!safeToInsert);
 }
 
+
+
 /*
  * Run in a loop to provide backwards and forwards commands to address 3
  */
@@ -327,7 +444,9 @@ void runDCCDemo(uint8_t address) {
 
         _delay_ms(1500);
         insertLightsPacket(address, true);
-
+		
+		
+		
         //wait for it to be safe to insert a new packet
         while (!safeToInsert);
         //now safe!
@@ -398,6 +517,9 @@ void setDataLED() {
     Setb(DCC_PORT, DCC_DATA_LED);
     Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_IDLE_LED);
+#ifdef SECOND_DATA_LED
+	Setb(DEBUG_LED_PORT, DEBUG_LED);
+#endif
 }
 
 void setServiceLED() {
@@ -410,6 +532,9 @@ void setIdleLED() {
     Setb(DCC_PORT, DCC_IDLE_LED);
     Clrb(DCC_PORT, DCC_SERVICE_MODE_LED);
     Clrb(DCC_PORT, DCC_DATA_LED);
+#ifdef SECOND_DATA_LED
+	Clrb(DEBUG_LED_PORT, DEBUG_LED);
+#endif
 }
 
 /*
@@ -430,9 +555,13 @@ void fillPacketBuffer() {
             Clrb(DCC_PORT, DCC_nOUT_PIN);
             //leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
             //we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
+			setDataLED();
             _delay_ms(500);
             operatingState = OPERATIONS_MODE;
-            insertIdlePacket(false);
+            //insertIdlePacket(false);
+			
+			enterOperationsMode();
+			
             break;
         case SERVICE_MODE:
             insertResetPacket(true);
@@ -637,11 +766,13 @@ ISR(TIMER0_COMPA_vect) {
             //need the next bit!
             bitState = determineNextBit();
             //debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
+			#ifdef DEBUG_MEMORY
             debugMemory[debugPosition] = (bitState == ONE_HIGH ? 1 : 0);
             debugPosition++;
             if (debugPosition == 127) {
-                debugPosition = 0;
+	            debugPosition = 0;
             }
+			#endif
             break;
     }
 
