@@ -41,9 +41,10 @@ volatile uint8_t transmittingDataByte;
 //build up the error detection byte as we transmit
 volatile uint8_t errorDetectionByte;
 
+#ifdef DEBUG_MEMORY
 volatile uint8_t debugMemory[128];
 volatile uint16_t debugPosition = 0;
-
+#endif
 /**
  * 
 The different states which are cycled through when transmitting data
@@ -420,6 +421,8 @@ void waitForSafeToInsert() {
     while (!safeToInsert);
 }
 
+
+
 /*
  * Run in a loop to provide backwards and forwards commands to address 3
  */
@@ -441,7 +444,9 @@ void runDCCDemo(uint8_t address) {
 
         _delay_ms(1500);
         insertLightsPacket(address, true);
-
+		
+		
+		
         //wait for it to be safe to insert a new packet
         while (!safeToInsert);
         //now safe!
@@ -761,11 +766,13 @@ ISR(TIMER0_COMPA_vect) {
             //need the next bit!
             bitState = determineNextBit();
             //debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
+			#ifdef DEBUG_MEMORY
             debugMemory[debugPosition] = (bitState == ONE_HIGH ? 1 : 0);
             debugPosition++;
             if (debugPosition == 127) {
-                debugPosition = 0;
+	            debugPosition = 0;
             }
+			#endif
             break;
     }
 

@@ -27,7 +27,7 @@
 #define  ATMEGA168      0
 #define  ATMEGA644		1
 
-#define  PROCESSOR     ATMEGA168
+#define  PROCESSOR     ATMEGA644
 
 //temporarily only one LED on the board
 #define SECOND_DATA_LED

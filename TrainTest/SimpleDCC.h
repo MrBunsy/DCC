@@ -30,6 +30,8 @@
 	//DCC and nDCC pins
 	#define DCC_OUT_PIN PORTA6
 	#define DCC_nOUT_PIN PORTA7
+	//current sense input for ADC
+	#define CURRENT_SENSE_ADC_IN ADC5_BIT
 #elif (PROCESSOR == ATMEGA168)
 	//port registers for the DCC pins
 	#define DCC_PORT PORTC
@@ -56,11 +58,12 @@
 #endif
 
 #define USE_DCC_TIMINGS
+//buffer needs to be at least 50 to hold all the initialisation packets
 #if (PROCESSOR == ATMEGA644) 
 	#define PACKET_BUFFER_SIZE (128)
 #elif (PROCESSOR == ATMEGA168)
 //not enough RAM!
-	#define PACKET_BUFFER_SIZE (64)
+	#define PACKET_BUFFER_SIZE (100)
 #endif
 /*
 While the baseline packet has a length of 3 data bytes separated by a "0" bit, a packet using the extended
