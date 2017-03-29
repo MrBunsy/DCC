@@ -63,8 +63,8 @@ message_t readMessage(void) {
 /*
  * Take control and just sit there processing input from uart
  */
-void processInput() {
-    while (true) {
+void processInput(bool blocking) {
+    do{
         message_t message = readMessage();
         dccPacket_t *packet;
         uint8_t i;
@@ -124,5 +124,5 @@ void processInput() {
 
                 break;
         }
-    }
+    }while(blocking);
 }

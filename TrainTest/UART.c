@@ -13,7 +13,7 @@
  */
 
 
-uint16_t debug;
+//uint16_t debug;
 
 void USART_Init(uint32_t baud) {
 
@@ -39,7 +39,7 @@ void USART_Init(uint32_t baud) {
             | (1 << UCSZ00) // 8 bits
             | (0 << UCSZ02); //8 bits
     //UCSR0A  U2X0
-	debug=0;
+	//debug=0;
 }
 
 uint8_t USART_Receive(void) {
@@ -50,7 +50,20 @@ uint8_t USART_Receive(void) {
     return UDR0;
 }
 
+/************************************************************************/
+/* Return true if data is available to be read from Rx                  */
+/************************************************************************/
+bool USART_DataReadyToBeRead(void){
+	return (UCSR0A & (1 << RXC0));
+}
 
+/************************************************************************/
+/* Read data from Rx, to be used with USART_DataReadyToBeRead           */
+/************************************************************************/
+uint8_t USART_ReceiveNonBlock(void) {
+	/* Get and return received data from buffer */
+	return UDR0;
+}
 
 void USART_Transmit(uint8_t data) {
     /* Wait for empty transmit buffer */
@@ -58,9 +71,9 @@ void USART_Transmit(uint8_t data) {
         ;
     /* Put data into buffer, sends the data */
     UDR0 = data;
-	debug++;
-	if(debug==256)
-	{
-		debug=0;
-	}
+	//debug++;
+	//if(debug==256)
+	//{
+		//debug=0;
+	//}
 }

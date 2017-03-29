@@ -46,8 +46,10 @@ void timer_init() {
 
 int main(void) {
 	
+	Setb(LED_DIRECTION, LED_DATA);
+	Setb(LED_PORT, LED_DATA);
 	
-
+//	while(1);
 
 	#ifdef DC_TEST
 		//if this is defined, just power the track with DC (used by me to test motors)
@@ -87,7 +89,7 @@ int main(void) {
 		//IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
 		//this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
 		
-		processInput();
+		processInput(false);
 
 	}
 }

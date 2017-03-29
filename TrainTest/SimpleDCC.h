@@ -12,29 +12,38 @@
 
 
 #include "Include.h"
-
 #include "UART.h"
-
 #include "ADC.h"
 
 #if (PROCESSOR == ATMEGA644) 
 	//port registers for the DCC pins
-	#define DCC_PORT PORTA
-	#define DCC_DIRECTION DDRA
-	#define DCC_PIN PINA
-	//service mode switch pin (input, active low)
-	#define DCC_nSERVICE_PIN PINA0
-	#define DCC_SERVICE_PULLUP PORTA0
+	#define DCC_PORT PORTB
+	#define DCC_DIRECTION DDRB
+	#define DCC_PIN PINB
+	
+	#define DCC_MAIN_TRACK_OUT PORTB0
+	#define DCC_MAIN_TRACK_ENABLE PORTB1
+	
+	#define DCC_PROG_TRACK_OUT PORTB2
+	#define DCC_PROG_TRACK_ENABLE PORTB3
+	
+	#define LED_PORT PORTD
+	#define LED_DIRECTION DDRD
+	#define LED_PIN PIND
+	
 	//LEDs
-	#define DCC_DATA_LED PORTA1
-	#define DCC_SERVICE_MODE_LED PORTA2
-	#define DCC_IDLE_LED PORTA3
-	//DCC and nDCC pins
-	#define DCC_OUT_PIN PORTA6
-	#define DCC_nOUT_PIN PORTA7
+	#define LED_DATA PORTD4 //yellow
+	#define LED_SERVICE_MODE PORTD6 //blue
+	#define LED_IDLE PORTD5 //green
+	#define LED_OVERCURRENT PORTD3 //red
+
 	//current sense input for ADC
-	#define CURRENT_SENSE_ADC_IN ADC5_BIT
+	#define CURRENT_SENSE_MAIN_TRACK 0//ADC0_BIT
+	#define CURRENT_SENSE_PROG_TRACK 1//ADC1_BIT
+	
 #elif (PROCESSOR == ATMEGA168)
+/*	//TODO - REDO SUPPORT FOR THIS CHIP (if I ever want it?)
+
 	//port registers for the DCC pins
 	#define DCC_PORT PORTC
 	#define DCC_DIRECTION DDRC
@@ -48,21 +57,14 @@
 	#define DCC_IDLE_LED PORTC2
 	//DCC and nDCC pins
 	#define DCC_OUT_PIN PORTC1
-	#define DCC_nOUT_PIN PORTC0
+	#define DCC_nOUT_PIN PORTC0*/
 #endif
 
 
 //ADC reads 0-255, which maps to 0-Vcc. Assuming a 10ohm sense resistor, MAX_CURRENT should be 0.1*current_in_amps*255/Vcc
-#define MAX_CURRENT (10)//10 is about 2amps
+#define MAX_CURRENT (150) //amp on arduino shield ensures that max current is 3.3v, so we should probably use 3.3 as our reference
 
-#ifdef SECOND_DATA_LED
-	//little hack to support a second LED on a new board before the small coloured LEDs arrive
-	#define DEBUG_LED_PORT	PORTB
-	#define DEBUG_LED	PORTB1
-	#define DEBUG_LED_DIR	DDRB
-#endif
 
-#define USE_DCC_TIMINGS
 //buffer needs to be at least 50 to hold all the initialisation packets
 #if (PROCESSOR == ATMEGA644) 
 	#define PACKET_BUFFER_SIZE (128)
@@ -89,14 +91,13 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 //if running DC test, how long between switching modes
 #define DC_DELAY (1000)
 
-//if defined, service mode will always be available, regardless of if the service_mode_pin is pulled low
-#define OVERRIDE_SERVICE_MODE_PIN
 
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;
 
 //true if too much current has been drawn
-volatile bool highCurrentDraw;
+volatile bool highCurrentDrawMainTrack;
+volatile bool highCurrentDrawProgTrack;
 
 /*
  * the information required for a packet.  From this a whole real packet can be generated
@@ -118,7 +119,7 @@ void insertResetPacket(bool longPreamble);
 dccPacket_t *getInsertPacketPointer();
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
 void waitForSafeToInsert();
-void emergancyCutPower();
+void emergencyCutPower(bool mainTrack);
 
 bool isInServiceMode();
 void leaveServiceMode();
@@ -129,6 +130,7 @@ void setDataLED();
 void setIdleLED();
 
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
+//service mode is going to need overhauling with dccpp I think
 
 typedef enum baseStates {
     OPERATIONS_MODE,
@@ -143,11 +145,5 @@ enum speedModes {
     SPEEDMODE_128STEP
 };
 
-//enum functions {
-    //LIGHT_FRONT = 0,
-    //LIGHT_REAR,
-	//FUNCTION_3,
-	//FUNCTION_4
-//};
 
 #endif /* TRAINTEST_H_ */

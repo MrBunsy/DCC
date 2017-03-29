@@ -89,5 +89,5 @@ typedef struct {
 
 
 message_t readMessage(void);
-void processInput();
+void processInput(bool blocking);
 #endif /* COMMS_H_ */
