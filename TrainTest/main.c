@@ -12,6 +12,7 @@
 #include "UART.h"
 #include "comms.h"
 #include "ADC.h"
+#include "PacketRegister.h"
 
 //#define DCC_DEMO
 

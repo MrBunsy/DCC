@@ -32,6 +32,12 @@
 #define  PROCESSOR     ATMEGA644
 
 #include "arduino/Arduino.h"
+
+//things from DCCpp_Uno.h
+#define COMM_TYPE 0
+#define INTERFACE Serial
+
+
 //stuff for using dccpp code
 //#define byte uint8_t
 //#ifndef max
