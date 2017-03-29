@@ -18,17 +18,16 @@ import java.util.logging.Logger;
  */
 public class SocketCommsServer {
 
-    private OutputStream out;
-    private InputStream in;
-    private Socket socket;
-    private TwoWaySerialComm serialComms;
-    private boolean running;
+    protected OutputStream out;
+    protected InputStream in;
+    protected Socket socket;
+    protected TwoWaySerialComm serialComms;
+    protected boolean running;
 
     public SocketCommsServer(Socket socket, TwoWaySerialComm serialComms) {
         this.socket = socket;
         this.serialComms = serialComms;
         System.out.println(this.socket.getInetAddress().toString() + " connected");
-
         try {
 
             out = this.socket.getOutputStream();
@@ -51,7 +50,7 @@ public class SocketCommsServer {
         (new Thread(socketToSerial)).start();
         (new Thread(serialToSocket)).start();
 
-        while (running){
+        while (running) {
             try {
                 Thread.sleep(10);
             } catch (InterruptedException ex) {
@@ -61,6 +60,7 @@ public class SocketCommsServer {
 
         socketToSerial.stop();
         serialToSocket.stop();
+
         System.out.println("Stopping Serial to Socket Link");
     }
 
@@ -78,9 +78,8 @@ public class SocketCommsServer {
             this.server = server;
             this.printAscii = printAscii;
         }
-        
-        public LinkStreams(InputStream streamIn, OutputStream streamOut, SocketCommsServer server)
-        {
+
+        public LinkStreams(InputStream streamIn, OutputStream streamOut, SocketCommsServer server) {
             this(streamIn, streamOut, server, false);
         }
 
@@ -97,7 +96,7 @@ public class SocketCommsServer {
                 while ((bytesRead = streamIn.read(buffer)) != -1 && running) {
                     streamOut.write(buffer, 0, bytesRead);
                     streamOut.flush();
-                    if (this.printAscii){
+                    if (this.printAscii) {
                         byte[] slice = Arrays.copyOfRange(buffer, 0, bytesRead);
                         System.out.print(new String(slice));
                     }
