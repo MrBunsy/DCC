@@ -16,5 +16,6 @@
 void USART_Init(uint32_t baud);
 uint8_t USART_Receive(void) ;
 void USART_Transmit( uint8_t data );
+void USART_TransmitString(uint8_t* data);
 
 #endif /* SETUP_H_ */

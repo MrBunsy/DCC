@@ -77,3 +77,7 @@ void USART_Transmit(uint8_t data) {
 		//debug=0;
 	//}
 }
+
+void USART_TransmitString(uint8_t* data){
+	//TODO
+}
