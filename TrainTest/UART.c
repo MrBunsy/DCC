@@ -50,7 +50,20 @@ uint8_t USART_Receive(void) {
     return UDR0;
 }
 
+/************************************************************************/
+/* Return true if data is available to be read from Rx                  */
+/************************************************************************/
+bool USART_DataReadyToBeRead(void){
+	return (UCSR0A & (1 << RXC0));
+}
 
+/************************************************************************/
+/* Read data from Rx, to be used with USART_DataReadyToBeRead           */
+/************************************************************************/
+uint8_t USART_ReceiveNonBlock(void) {
+	/* Get and return received data from buffer */
+	return UDR0;
+}
 
 void USART_Transmit(uint8_t data) {
     /* Wait for empty transmit buffer */

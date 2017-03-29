@@ -87,7 +87,7 @@ int main(void) {
 		//IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
 		//this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
 		
-		processInput();
+		processInput(false);
 
 	}
 }

@@ -6,6 +6,7 @@
  */ 
 
 #include "ADC.h"
+#include "stdio.h"
 
 
 void adc_init(){
@@ -36,7 +37,7 @@ void adc_init(){
 	//value = (value & ~mask) | (newvalue & mask);
 	#define INPUTMASK  (0x1f) // 0001 1111
 	//this is just setting the last 5 bits to the value of the adc input pin
-	ADMUX = (ADMUX & ~INPUTMASK) | (CURRENT_SENSE_ADC_IN & INPUTMASK);
+	ADMUX = (ADMUX & ~INPUTMASK) | (CURRENT_SENSE_MAIN_TRACK & INPUTMASK);
 	
 	//The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC) must be written to '0' in order to be enable the ADC.
 	Clrb(PRR0, PRADC);
@@ -80,8 +81,8 @@ void printADCValue(){
 ISR(ADC_vect)
 {
 	if (ADCH > MAX_CURRENT){
-		highCurrentDraw = true;
-		emergancyCutPower();
+		highCurrentDrawMainTrack = true;
+		emergencyCutPower(true);
 		//USART_Transmit("h");
 	}
 

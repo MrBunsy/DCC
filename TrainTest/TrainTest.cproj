@@ -42,7 +42,7 @@
       <ToolOptions>
         <InterfaceProperties>
           <JtagEnableExtResetOnStartSession>false</JtagEnableExtResetOnStartSession>
-          <JtagDbgClock>500000</JtagDbgClock>
+          <JtagDbgClock>100000</JtagDbgClock>
           <IspClock>125000</IspClock>
         </InterfaceProperties>
         <InterfaceName>JTAG</InterfaceName>
@@ -55,7 +55,7 @@
     <preserveEEPROM>true</preserveEEPROM>
     <avrtoolserialnumber>00A20005154E</avrtoolserialnumber>
     <avrdeviceexpectedsignature>0x1E960A</avrdeviceexpectedsignature>
-    <avrtoolinterfaceclock>500000</avrtoolinterfaceclock>
+    <avrtoolinterfaceclock>100000</avrtoolinterfaceclock>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <ToolchainSettings>

@@ -31,9 +31,7 @@
 
 
 
-
-//temporarily only one LED on the board
-#define SECOND_DATA_LED
-
+//for debugging :P
+#define DEBUG_LED_FLASH
 
 #endif /* INCLUDE_H_ */
