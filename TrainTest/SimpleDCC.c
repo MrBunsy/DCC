@@ -505,21 +505,21 @@ dccPacket_t *getCurrentPacket() {
 }
 
 void setDataLED() {
-	Setb(DCC_PORT, LED_DATA);
-	Clrb(DCC_PORT, LED_SERVICE_MODE);
-	Clrb(DCC_PORT, LED_IDLE);
+	Setb(LED_PORT, LED_DATA);
+	Clrb(LED_PORT, LED_SERVICE_MODE);
+	Clrb(LED_PORT, LED_IDLE);
 }
 
 void setServiceLED() {
-	Setb(DCC_PORT, LED_SERVICE_MODE);
-	Clrb(DCC_PORT, LED_DATA);
-	Clrb(DCC_PORT, LED_IDLE);
+	Setb(LED_PORT, LED_SERVICE_MODE);
+	Clrb(LED_PORT, LED_DATA);
+	Clrb(LED_PORT, LED_IDLE);
 }
 
 void setIdleLED() {
-	Setb(DCC_PORT, LED_IDLE);
-	Clrb(DCC_PORT, LED_SERVICE_MODE);
-	Clrb(DCC_PORT, LED_DATA);
+	Setb(LED_PORT, LED_IDLE);
+	Clrb(LED_PORT, LED_SERVICE_MODE);
+	Clrb(LED_PORT, LED_DATA);
 }
 
 /*

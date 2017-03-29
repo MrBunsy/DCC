@@ -46,8 +46,8 @@ void timer_init() {
 
 int main(void) {
 	
-	Setb(LED_DIRECTION, LED_IDLE);
-	Setb(LED_PORT, LED_IDLE);
+	Setb(LED_DIRECTION, LED_DATA);
+	Setb(LED_PORT, LED_DATA);
 	
 //	while(1);
 

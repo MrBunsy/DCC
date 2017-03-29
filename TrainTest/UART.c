@@ -13,7 +13,7 @@
  */
 
 
-uint16_t debug;
+//uint16_t debug;
 
 void USART_Init(uint32_t baud) {
 
@@ -39,7 +39,7 @@ void USART_Init(uint32_t baud) {
             | (1 << UCSZ00) // 8 bits
             | (0 << UCSZ02); //8 bits
     //UCSR0A  U2X0
-	debug=0;
+	//debug=0;
 }
 
 uint8_t USART_Receive(void) {
@@ -71,9 +71,9 @@ void USART_Transmit(uint8_t data) {
         ;
     /* Put data into buffer, sends the data */
     UDR0 = data;
-	debug++;
-	if(debug==256)
-	{
-		debug=0;
-	}
+	//debug++;
+	//if(debug==256)
+	//{
+		//debug=0;
+	//}
 }
