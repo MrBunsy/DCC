@@ -32,14 +32,14 @@
 	#define LED_PIN PIND
 	
 	//LEDs
-	#define LED_DATA PORTA4 //yellow
-	#define LED_SERVICE_MODE PORTA6 //blue
-	#define LED_IDLE PORTA5 //green
-	#define LED_OVERCURRENT PORTA3 //red
+	#define LED_DATA PORTD4 //yellow
+	#define LED_SERVICE_MODE PORTD6 //blue
+	#define LED_IDLE PORTD5 //green
+	#define LED_OVERCURRENT PORTD3 //red
 
 	//current sense input for ADC
-	#define CURRENT_SENSE_MAIN_TRACK ADC0_BIT
-	#define CURRENT_SENSE_PROG_TRACK ADC1_BIT
+	#define CURRENT_SENSE_MAIN_TRACK 0//ADC0_BIT
+	#define CURRENT_SENSE_PROG_TRACK 1//ADC1_BIT
 	
 #elif (PROCESSOR == ATMEGA168)
 /*	//TODO - REDO SUPPORT FOR THIS CHIP (if I ever want it?)

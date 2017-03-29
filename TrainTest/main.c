@@ -46,8 +46,10 @@ void timer_init() {
 
 int main(void) {
 	
+	Setb(LED_DIRECTION, LED_IDLE);
+	Setb(LED_PORT, LED_IDLE);
 	
-
+//	while(1);
 
 	#ifdef DC_TEST
 		//if this is defined, just power the track with DC (used by me to test motors)
