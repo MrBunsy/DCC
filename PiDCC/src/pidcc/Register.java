@@ -75,7 +75,7 @@ public class Register {
      *
      * @return
      */
-    public ByteBuffer[] getSimpleDCCPackets() {
+    public ArrayList<ByteBuffer> getSimpleDCCPackets() {
         ArrayList<ByteBuffer> packetArray = new ArrayList<ByteBuffer>();
 
         byte[] functionPacket = NmraPacket.function0Through4Packet(address, address > 127,
@@ -99,7 +99,7 @@ public class Register {
 
         packetArray.add(SimpleDCCPacket.createFromDCCPacket(speedPacket, REPEATS));
 
-        return packetArray.toArray(new ByteBuffer[1]);
+        return packetArray;
 
     }
 }

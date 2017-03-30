@@ -5,7 +5,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,16 +24,72 @@ import java.util.logging.Logger;
 public class DccppServer extends SocketCommsServer {
 
     private Register[] registerList;
-    private static int MAX_MAIN_REGISTERS = 100;
+    private final static int MAX_MAIN_REGISTERS = 100;
     private boolean mainTrackEnabled = false;
     private boolean progTrackEnabled = false;
+    private ArrayBlockingQueue<ByteBuffer> uartQueue;
+    private final static int UART_QUEUE_LENGTH = 10;
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
         super(socket, serialComms);
+
         this.registerList = new Register[MAX_MAIN_REGISTERS];
+        this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
+
         for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
             this.registerList[i] = new Register();
         }
+    }
+
+    /**
+     * run until finished, then return
+     */
+    @Override
+    public void run() {
+
+        //fire up a load of threads
+        //read the TCP stream IN (this will call processDccppCommand)
+        TCPReadThread tcpRead = new TCPReadThread();
+        (new Thread(tcpRead)).start();
+
+        //write UART queue OUT (this will write everthing in uartQueue)
+        UARTWriteThread uartWrite = new UARTWriteThread();
+        (new Thread(uartWrite)).start();
+
+        //read UART IN (this will call processUARTCommand)
+        UARTReadThread uartRead = new UARTReadThread();
+        (new Thread(uartRead)).start();
+
+        running = true;
+        while (running) {
+            if (uartQueue.isEmpty()) {
+
+                ArrayList<ByteBuffer> messages = new ArrayList<>();
+
+                //trundle through the registers to get some new messages to add to the queue
+                for (Register r : this.registerList) {
+                    if (r.inUse()) {
+                        ArrayList<ByteBuffer> registerMessages = r.getSimpleDCCPackets();
+                        messages.addAll(registerMessages);
+
+                    }
+                }
+                for (ByteBuffer message : messages) {
+                    //TODO check queue large enough, with ltos of registers could eaisly not be
+                    //need proper system there
+                    uartQueue.add(message);
+                }
+
+            }
+            try {
+                //TODO ...do this better. A proper wait?
+                Thread.sleep(10);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+        System.out.println("Stopping Dccpp Server");
     }
 
     /**
@@ -68,7 +127,7 @@ public class DccppServer extends SocketCommsServer {
         }
     }
 
-    private void processCommand(String command) {
+    private void processDccppCommand(String command) {
         command = tidyCommand(command);
 
         //remove encasing syntax
@@ -381,7 +440,7 @@ public class DccppServer extends SocketCommsServer {
  *    
  *    returns: series of status messages that can be read by an interface to determine status of DCC++ Base Station and important settings
                  */
-                if (this.mainTrackEnabled) {
+                if (this.mainTrackEnabled || true) {
                     this.returnString("<p0>");
                 } else if (this.progTrackEnabled) {
                     //TODO this logic doesn't match up to the original, which seemed to be program OR main
@@ -413,7 +472,7 @@ public class DccppServer extends SocketCommsServer {
 
                 //TODO actual version info
                 this.returnString("<iDCC++ compatible server for SimpleDCC>");
-                this.returnString("<N 1 " + this.socket.getInetAddress().toString() + ">");
+                this.returnString("<N 1 " + this.socket.getInetAddress().toString().replace("/", "") + ">");
 //      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
 //      INTERFACE.print(ARDUINO_TYPE);
 //      INTERFACE.print(" / ");
@@ -626,48 +685,111 @@ public class DccppServer extends SocketCommsServer {
 
     }
 
-    @Override
-    public void run() {
-        running = true;
-//        LinkStreams socketToSerial = new LinkStreams(in, serialComms.getOutputStream(), this);
-//        LinkStreams serialToSocket = new LinkStreams(serialComms.getInputStream(), out, this);
-//
-//        (new Thread(socketToSerial)).start();
-//        (new Thread(serialToSocket)).start();
-//        BufferedReader br = new BufferedReader(new java.io.InputStreamReader(in));        
-
-        while (running) {
-            StringBuilder sb = new StringBuilder();
-            do {
-                try {
-                    sb.append((char) in.read());
-
-                } catch (IOException ex) {
-                    Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
-                    running = false;
-                }
-            } while (sb.indexOf(">") < 0);
-
-            //sb has collected an entire instruction!
-            this.processCommand(sb.toString());
-        }
-
-//        socketToSerial.stop();
-//        serialToSocket.stop();
-        System.out.println("Stopping Serial to Socket Link");
+    public void processUARTCommand(byte[] command) {
+        //TODO
     }
 
-    class UARTCommsThread implements Runnable {
+    class TCPReadThread implements Runnable {
 
-        private TwoWaySerialComm serialComms;
+        private boolean running;
 
-        public UARTCommsThread(TwoWaySerialComm serialComms) {
-            this.serialComms = serialComms;
+        @Override
+        public void run() {
+            running = true;
+            while (running) {
+                StringBuilder sb = new StringBuilder();
+                do {
+                    try {
+                        sb.append((char) in.read());
+
+                    } catch (IOException ex) {
+                        Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                        running = false;
+                    }
+                } while (running && sb.indexOf(">") < 0);
+
+                //sb has collected an entire instruction!
+                if (running) {
+                    processDccppCommand(sb.toString());
+                }
+            }
+
+            System.out.println("Stopping TCP Read");
+        }
+    }
+
+    class UARTReadThread implements Runnable {
+
+        private boolean running;
+        private InputStream streamIn;
+
+        /**
+         * this thread will grab messages from uartqueue and put them on the
+         * UART
+         *
+         * @param serialComms
+         * @param uartQueue
+         */
+        public UARTReadThread() {
+            this.streamIn = serialComms.getInputStream();
+        }
+
+        public void stop() {
+            running = false;
         }
 
         @Override
         public void run() {
-            throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+            running = true;
+            while (running) {
+
+                //todo
+            }
+            //TODO design protocol for return AVR-PC comms
+
+            this.stop();
+        }
+
+    }
+
+    class UARTWriteThread implements Runnable {
+
+        private boolean running;
+        private OutputStream streamOut;
+
+        /**
+         * this thread will grab messages from uartqueue and put them on the
+         * UART
+         *
+         * @param serialComms
+         * @param uartQueue
+         */
+        public UARTWriteThread() {
+            this.streamOut = serialComms.getOutputStream();
+        }
+
+        public void stop() {
+            running = false;
+        }
+
+        @Override
+        public void run() {
+            running = true;
+            while (running) {
+
+                try {
+                    ByteBuffer message = uartQueue.take();
+                    System.out.println("writing UART out");
+                    streamOut.write(message.array());
+                    streamOut.flush();
+//                    Thread.sleep(100);
+                } catch (InterruptedException | IOException ex) {
+                    Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                    this.stop();
+                }
+
+            }
+            this.stop();
         }
 
     }
