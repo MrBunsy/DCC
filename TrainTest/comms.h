@@ -94,8 +94,8 @@ typedef struct {
 } message_t;
 
 
-
-
+void transmitMessage(uint8_t* messagePointer);
+void transmitPacketBufferSize(uint8_t size);
 message_t readMessage(void);
 void processInput(bool blocking);
 #endif /* COMMS_H_ */

@@ -49,11 +49,11 @@ int main(void) {
 	Setb(LED_DIRECTION, LED_DATA);
 	Setb(LED_PORT, LED_DATA);
 	
-//	while(1);
+	//	while(1);
 
 	#ifdef DC_TEST
-		//if this is defined, just power the track with DC (used by me to test motors)
-		DC_Test();
+	//if this is defined, just power the track with DC (used by me to test motors)
+	DC_Test();
 	#endif
 
 	adc_init();
@@ -71,17 +71,17 @@ int main(void) {
 	//#define ADC_TEST
 
 	#ifdef ADC_TEST
-		adc_init();
+	adc_init();
 	
-		while(1){
-			printADCValue();
-		}
+	while(1){
+		printADCValue();
+	}
 	#endif
 	
 	#ifdef DCC_DEMO
-		//setAddress(5);
+	//setAddress(5);
 	
-		runDCCDemo(6);
+	runDCCDemo(6);
 	#endif
 
 	while (1) {
@@ -89,10 +89,15 @@ int main(void) {
 		//if data received over UART, process it
 		if(USART_DataInAvailable()){
 			//note, this will still block when waiting for the sync bytes, there is no timeout there yet
-			processInput(false);	
+			processInput(false);
 		}
 		//I'd like to do current checking here, but while processInput could potentially block it's best left in the DCC 'thread'
 		//I think processInput will potentially only block if garbage is on the serial port, so if a proper message is sent at startup, that might clear it?
 		
+		//inform the listener if the packet buffer is getting low
+		uint8_t packetsInBuffer = getPacketsInBuffer();
+		//if (packetsInBuffer <= 2){
+			transmitPacketBufferSize(packetsInBuffer);
+		//}
 	}
 }
