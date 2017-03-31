@@ -14,7 +14,8 @@ import java.nio.ByteBuffer;
 public class SimpleDCCPacket {
 
     //TODO integrate with PiDCC
-    public static int SYNC_BYTES = 4, MESSAGE_SIZE = (10 + 4), MAX_PRIORITY = 255, OPERATIONS_MODE = 1, PROG_DIRECT_BYTE = 0,
+    //MESSAGE_SIZE includes sync bytes
+    public static int SYNC_BYTES = 4, MESSAGE_SIZE = (10 + 4), OPERATIONS_MODE = 1, PROG_DIRECT_BYTE = 0,
             MAX_DATA_BYTES = 6, PROG_ADDRESS = 2;//note one more than on AVR because this includes address
 
     private static ByteBuffer createHeader() {
@@ -37,17 +38,17 @@ public class SimpleDCCPacket {
         
         bb.flip();
     }
-
+    /**
+     * TODO details about this, can't remember anything about it
+     * @param cv
+     * @param newValue
+     * @return 
+     */
     public static ByteBuffer createProgrammeDirectByte(int cv, int newValue) {
         ByteBuffer bb = createHeader();
 
         //message type byte
         bb.put((byte) (PROG_DIRECT_BYTE & 0xff));
-
-        //priority
-        bb.put((byte) 255);
-        //address
-        bb.put((byte) 0);
 
         //cv (uint16)
         //bb.putChar((char) cv);
@@ -77,11 +78,6 @@ public class SimpleDCCPacket {
         //message type byte
         bb.put((byte) (PROG_ADDRESS & 0xff));
 
-        //priority
-        bb.put((byte) 255);
-        //address
-        bb.put((byte) 0);
-
         bb.put((byte) (newAddress & 0xff));
 
         addFooter(bb);
@@ -109,8 +105,8 @@ public class SimpleDCCPacket {
          */
         //message type byte
         bb.put((byte) (OPERATIONS_MODE & 0xff));
-        //priority byte (repeats atm)
-        bb.put((byte) (1 & 0xff));
+//        //priority byte (repeats atm)
+//        bb.put((byte) (1 & 0xff));
 
         //insert the bytes
         for (byte b : packet) {

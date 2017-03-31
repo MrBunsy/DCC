@@ -782,7 +782,6 @@ public class DccppServer extends SocketCommsServer {
                     System.out.println("writing UART out");
                     streamOut.write(message.array());
                     streamOut.flush();
-//                    Thread.sleep(100);
                 } catch (InterruptedException | IOException ex) {
                     Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
                     this.stop();
