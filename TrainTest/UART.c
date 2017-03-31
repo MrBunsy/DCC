@@ -53,12 +53,12 @@ uint8_t USART_Receive(void) {
 /************************************************************************/
 /* Return true if data is available to be read from Rx                  */
 /************************************************************************/
-bool USART_DataReadyToBeRead(void){
+bool USART_DataInAvailable(void){
 	return (UCSR0A & (1 << RXC0));
 }
 
 /************************************************************************/
-/* Read data from Rx, to be used with USART_DataReadyToBeRead           */
+/* Read data from Rx, to be used with USART_DataInAvailable             */
 /************************************************************************/
 uint8_t USART_ReceiveNonBlock(void) {
 	/* Get and return received data from buffer */

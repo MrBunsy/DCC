@@ -67,12 +67,20 @@ volatile uint8_t bitState;
 
 /*
 * Get a pointer to a position in the packet buffer where we can add a packet.  Also increment packetsInBuffer.
+* blocks if packet buffer is full
 */
 dccPacket_t *getInsertPacketPointer() {
 	while (packetsInBuffer == PACKET_BUFFER_SIZE);
 	dccPacket_t* p = &(packetBuffer[(transmittingPacket + packetsInBuffer) % PACKET_BUFFER_SIZE]);
 	packetsInBuffer++;
 	return p;
+}
+
+/************************************************************************/
+/* returns how many messages are in the buffer                          */
+/************************************************************************/
+uint8_t getPacketsInBuffer(){
+	return packetsInBuffer;
 }
 
 /**

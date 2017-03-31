@@ -12,7 +12,6 @@
 #include "UART.h"
 #include "comms.h"
 #include "ADC.h"
-#include "PacketRegister.h"
 
 //#define DCC_DEMO
 
@@ -86,11 +85,14 @@ int main(void) {
 	#endif
 
 	while (1) {
-
-		//IDEA - have a flag which is raised at the start of transmitting a packet - then only insert while this is asserted
-		//this will mean there are hundreds of clock cycles before a new idle packet will be automatically inserted
 		
-		processInput(false);
-
+		//if data received over UART, process it
+		if(USART_DataInAvailable()){
+			//note, this will still block when waiting for the sync bytes, there is no timeout there yet
+			processInput(false);	
+		}
+		//I'd like to do current checking here, but while processInput could potentially block it's best left in the DCC 'thread'
+		//I think processInput will potentially only block if garbage is on the serial port, so if a proper message is sent at startup, that might clear it?
+		
 	}
 }

@@ -87,7 +87,7 @@ void processInput(bool blocking) {
                     //for(i=0;i< DUPLICATION;i++){
                     packet = getInsertPacketPointer();
                     //address is actually just the first data byte as far as DCC/JMRI is concerned, it's *normally* address which is why I called it hta to begin with
-                    packet->address = message.address;
+                    packet->address = message.data.opsModePacketMessageData.address;
                     //comms protocol is assumign that address is part of the data, so subtract one from this until internally
                     //address is subsumed into data
                     //also remove one because JMRI transmits the error detection packet, which *we* generate ourselves!
@@ -105,13 +105,13 @@ void processInput(bool blocking) {
             case COMMAND_SET_SPEED:
                 waitForSafeToInsert();
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertSpeedPacket(message.address, message.data.speedMessageData.speed, message.data.speedMessageData.forwards, SPEEDMODE_128STEP);
+                    insertSpeedPacket(message.data.speedMessageData.address, message.data.speedMessageData.speed, message.data.speedMessageData.forwards, SPEEDMODE_128STEP);
                 }
                 break;
             case COMMAND_ENABLE_LIGHTS:
                 waitForSafeToInsert();
                 for (i = 0; i < DUPLICATION; i++) {
-                    insertLightsPacket(message.address, message.data.lightsMessageData.on);
+                    insertLightsPacket(message.data.lightsMessageData.address, message.data.lightsMessageData.on);
                 }
                 break;
             case COMMAND_EMERGENCY_STOP:

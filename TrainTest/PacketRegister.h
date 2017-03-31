@@ -21,17 +21,19 @@ Part of DCC++ BASE STATION for the Arduino
 
 // Define a series of registers that can be sequentially accessed over a loop to generate a repeating series of DCC Packets
 
-struct Packet{
+typedef struct {
   byte buf[10];
   byte nBits;
-}; // Packet
+}Packet; // Packet
 
-struct Register{
+typedef struct{
   Packet packet[2];
   Packet *activePacket;
   Packet *updatePacket;
-  void initPackets();
-}; // Register
+  
+}Register; // Register
+
+void Register_initPackets(Register*);
   
 struct RegisterList{  
   int maxNumRegs;
@@ -44,21 +46,22 @@ struct RegisterList{
   byte currentBit;
   byte nRepeat;
   int *speedTable;
-  static byte idlePacket[];
-  static byte resetPacket[];
-  static byte bitMask[];
-  RegisterList(int);
-  void loadPacket(int, byte *, int, int, int=0) volatile;
-  void setThrottle(char *) volatile;
-  void setFunction(char *) volatile;  
-  void setAccessory(char *) volatile;
-  void writeTextPacket(char *) volatile;
-  void readCV(char *) volatile;
-  void writeCVByte(char *) volatile;
-  void writeCVBit(char *) volatile;
-  void writeCVByteMain(char *) volatile;
-  void writeCVBitMain(char *s) volatile;  
-  void printPacket(int, byte *, int, int) volatile;
-};
+  byte idlePacket[];
+  byte resetPacket[];
+  byte bitMask[];
+  };
+void RegisterList_constructor(int);
+void loadPacket(int, byte *, int, int, int=0) volatile;
+void setThrottle(char *) volatile;
+void setFunction(char *) volatile;
+void setAccessory(char *) volatile;
+void writeTextPacket(char *) volatile;
+void readCV(char *) volatile;
+void writeCVByte(char *) volatile;
+void writeCVBit(char *) volatile;
+void writeCVByteMain(char *) volatile;
+void writeCVBitMain(char *s) volatile;
+void printPacket(int, byte *, int, int) volatile;
+
 
 #endif
