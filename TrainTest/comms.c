@@ -13,23 +13,37 @@ uint32_t syncBytes = SYNC_INT;
 void readUntilSync() {
 
 	uint8_t * syncPointer = (uint8_t*) & syncBytes;
-	uint8_t syncPos = 0;
-	uint8_t in;
-	volatile uint8_t test;
-	while (true) {
-		in = USART_Receive();
-		test = *(syncPointer + syncPos);
-		if (in == test) {
-			syncPos++;
+	//uint8_t syncPos = 0;
+	//uint8_t in;
+	//volatile uint8_t test;
+	//uint8_t attempts = 0;
 
-			if (syncPos == NUM_SYNC_BYTES) {
-				//read all the sync bytes
-				return;
-			}
-			} else {
-			syncPos = 0;
-		}
+	uint8_t testBytes[NUM_SYNC_BYTES];
+
+	for(uint8_t i=0;i<NUM_SYNC_BYTES;i++){
+		testBytes[i] = USART_Receive();
 	}
+	
+
+
+	//while (true) {
+		for(uint8_t j=0;j<NUM_SYNC_BYTES;j++){
+			if (testBytes[j] != *(syncPointer + j)) {
+				//FAILED. get rid of the first byte, read one more new byte and try again.
+
+				//shuffle them all left by one
+				for(uint8_t k=0;k<NUM_SYNC_BYTES-1;k++){
+					testBytes[k] = testBytes[k+1];
+				}
+				transmitCommsDebug();
+				testBytes[NUM_SYNC_BYTES-1] = USART_Receive();
+				//go back to the beginning of the while loop with the new test bytes
+				j=0;
+			}
+		}
+		//if we've got here then we went through the loop NUM_SYNC_BYTES times without one being wrong!
+		return;
+	//}
 }
 
 /**
@@ -40,17 +54,17 @@ message_t readMessage(void) {
 	message_t message;
 
 	uint8_t *messagePointer = (uint8_t *) & message;
-
-	//volatile uint8_t debugBuffer[128];
-	//
-	//for(i=0;i<20;i++){
-	//debugBuffer[i] = USART_Receive();
-	//}
-
+	#ifdef DEBUGUART
+	volatile uint8_t debugBuffer[128];
+	
+	for(i=0;i<128;i++){
+		debugBuffer[i] = USART_Receive();
+	}
+	#endif
 	//sync up!
 	readUntilSync();
 
-	for (i = 0; i<sizeof (message_t); i++) {
+	for (i = 0; i<9; i++) {//
 		uint8_t in = USART_Receive();
 		*messagePointer = in;
 		messagePointer++;
@@ -67,6 +81,16 @@ void transmitPacketBufferSize(uint8_t size){
 	
 	message.commandType=RESPONSE_PACKET_BUFFER_SIZE;
 	message.data.packetBufferSizeData.packetsInBuffer = size;
+	
+	transmitMessage((uint8_t*)&message);
+}
+
+
+
+void transmitCommsDebug(void){
+	message_t message;
+	
+	message.commandType=RESPONSE_COMMS_ERROR;
 	
 	transmitMessage((uint8_t*)&message);
 }

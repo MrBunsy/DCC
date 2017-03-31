@@ -27,6 +27,7 @@ typedef enum {
 	COMMAND_ENTER_SERVICE_MODE,
 	
 	RESPONSE_PACKET_BUFFER_SIZE, //inform the listener how many packets are currently in the buffer
+	RESPONSE_COMMS_ERROR,
 } commandType_t;
 
 //used for finding the start of a packet:
@@ -98,4 +99,5 @@ void transmitMessage(uint8_t* messagePointer);
 void transmitPacketBufferSize(uint8_t size);
 message_t readMessage(void);
 void processInput(bool blocking);
+void transmitCommsDebug(void);
 #endif /* COMMS_H_ */
