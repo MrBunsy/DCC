@@ -40,7 +40,7 @@ public class PiDCC {
         serialComms = new TwoWaySerialComm();
         try {
             System.out.println("Connecting to serial port: " + uartPort);
-            serialComms.connect(uartPort);
+            serialComms.connect(uartPort,19200);
             comms = serialComms;
         } catch (Exception ex) {
             System.err.println("Failed to connect to " + uartPort + ": " + ex.getMessage());

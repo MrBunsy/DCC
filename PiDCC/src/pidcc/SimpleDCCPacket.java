@@ -15,8 +15,19 @@ public class SimpleDCCPacket {
 
     //TODO integrate with PiDCC
     //MESSAGE_SIZE includes sync bytes
-    public static int SYNC_BYTES = 4, MESSAGE_SIZE = (10 + 4), OPERATIONS_MODE = 1, PROG_DIRECT_BYTE = 0,
-            MAX_DATA_BYTES = 6, PROG_ADDRESS = 2;//note one more than on AVR because this includes address
+    public final static int SYNC_BYTES = 4;
+    public final static int MESSAGE_SIZE = (9 + 4);
+    //this is the AVR's max data bytes + address, which we treat as a bit of data
+    public final static int MAX_DATA_BYTES = 6;
+    public final static int COMMAND_PROG_DIRECT_BYTE = 0,
+            COMMAND_OPERATIONS_MODE = 1,
+            COMMAND_PROG_ADDRESS = 2,
+            COMMAND_REQUEST_BUFFER_SIZE = 7;
+    
+    public final static int RESPONSE_PACKET_BUFFER_SIZE = 8,
+            RESPONSE_COMMS_ERROR = 9;
+
+    public final static int[] syncBytes = {0xff, 0xcc, 0xcc, 0xff};
 
     private static ByteBuffer createHeader() {
         ByteBuffer bb = ByteBuffer.allocate(MESSAGE_SIZE);
@@ -35,56 +46,69 @@ public class SimpleDCCPacket {
             //System.out.println("pad");
             bb.put((byte) 0x00);
         }
-        
+
         bb.flip();
     }
+
     /**
      * TODO details about this, can't remember anything about it
+     *
      * @param cv
      * @param newValue
-     * @return 
+     * @return
      */
     public static ByteBuffer createProgrammeDirectByte(int cv, int newValue) {
         ByteBuffer bb = createHeader();
 
         //message type byte
-        bb.put((byte) (PROG_DIRECT_BYTE & 0xff));
+        bb.put((byte) (COMMAND_PROG_DIRECT_BYTE & 0xff));
 
         //cv (uint16)
         //bb.putChar((char) cv);
         //lowest byte
-        bb.put((byte)(cv & 0xff));
+        bb.put((byte) (cv & 0xff));
         //highest byte
-        bb.put((byte)((cv >> 8) & 0xff));
-        
+        bb.put((byte) ((cv >> 8) & 0xff));
+
         //new value (byte)
         bb.put((byte) newValue);
 
         addFooter(bb);
-        
-        
-        
+
         return bb;
     }
-    
+
     /**
-     * For programming in address-only mode (need this for my n-gauge bachmann decoders)
+     * For programming in address-only mode (need this for my n-gauge bachmann
+     * decoders)
+     *
      * @param newAddress
-     * @return 
+     * @return
      */
     public static ByteBuffer createProgrammeAddress(int newAddress) {
         ByteBuffer bb = createHeader();
 
         //message type byte
-        bb.put((byte) (PROG_ADDRESS & 0xff));
+        bb.put((byte) (COMMAND_PROG_ADDRESS & 0xff));
 
         bb.put((byte) (newAddress & 0xff));
 
         addFooter(bb);
-        
+
         return bb;
     }
+    
+    
+    public static ByteBuffer requestAVRPacketBufferSize(){
+        ByteBuffer bb = createHeader();
+        
+        bb.put((byte) (COMMAND_REQUEST_BUFFER_SIZE & 0xff));
+        
+        addFooter(bb);
 
+        return bb;
+    }
+    
     /**
      * Given a DCC packet, return a bytebuffer for sending to my DCC system
      *
@@ -104,7 +128,7 @@ public class SimpleDCCPacket {
          * unused atm)
          */
         //message type byte
-        bb.put((byte) (OPERATIONS_MODE & 0xff));
+        bb.put((byte) (COMMAND_OPERATIONS_MODE & 0xff));
 //        //priority byte (repeats atm)
 //        bb.put((byte) (1 & 0xff));
 

@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
 
 /**
  * Take ascii input and give out binary to pipe directly to the AVR (DCC packets
@@ -64,32 +65,45 @@ public class DccppServer extends SocketCommsServer {
         while (running) {
             if (uartQueue.isEmpty()) {
 
-                ArrayList<ByteBuffer> messages = new ArrayList<>();
-
-                //trundle through the registers to get some new messages to add to the queue
-                for (Register r : this.registerList) {
-                    if (r.inUse()) {
-                        ArrayList<ByteBuffer> registerMessages = r.getSimpleDCCPackets();
-                        messages.addAll(registerMessages);
-
-                    }
-                }
-                for (ByteBuffer message : messages) {
-                    //TODO check queue large enough, with ltos of registers could eaisly not be
-                    //need proper system there
-                    uartQueue.add(message);
-                }
-
+//                fillUARTQueue();
+                requestAVRPacketBufferSize();
+                
             }
             try {
                 //TODO ...do this better. A proper wait?
-                Thread.sleep(10);
+                Thread.sleep(100);
             } catch (InterruptedException ex) {
                 Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
 
         System.out.println("Stopping Dccpp Server");
+    }
+    
+    public void requestAVRPacketBufferSize(){
+        uartQueue.add(SimpleDCCPacket.requestAVRPacketBufferSize());
+    }
+    
+    /**
+     * Trundle through the registers to generate some packets to give to the AVR
+     * TODO locks! the registers are accessed from two different threads
+     */
+    public void fillUARTQueueWithRegisterInfo() {
+        ArrayList<ByteBuffer> messages = new ArrayList<>();
+
+        //trundle through the registers to get some new messages to add to the queue
+        for (Register r : this.registerList) {
+            if (r.inUse()) {
+                ArrayList<ByteBuffer> registerMessages = r.getSimpleDCCPackets();
+                messages.addAll(registerMessages);
+
+            }
+        }
+        for (ByteBuffer message : messages) {
+            //TODO check queue large enough, with ltos of registers could eaisly not be
+            //need proper system there
+            uartQueue.add(message);
+        }
     }
 
     /**
@@ -167,6 +181,10 @@ public class DccppServer extends SocketCommsServer {
 
                 this.registerList[register].setSpeed(speed, forwards);
                 this.registerList[register].setAddress(cab);
+                
+                //send this one right now, to reduce delay from the throttle
+                //I think this will be fine, as any old messges will be furhter ahead in the queue and any after this will ahve the new speedvalue
+                uartQueue.add(this.registerList[register].getSpeedMessage());
 
                 this.returnString("<T " + register + " " + speed + " " + (forwards ? 1 : 0) + ">");
                 break;
@@ -685,8 +703,22 @@ public class DccppServer extends SocketCommsServer {
 
     }
 
-    public void processUARTCommand(byte[] command) {
-        //TODO
+    public void processUARTResponse(byte[] message) {
+        int responseType = 0xff & message[0];
+
+        switch (responseType) {
+            case SimpleDCCPacket.RESPONSE_PACKET_BUFFER_SIZE:
+                int packetsInBuffer = 0xff & message[1];
+                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}", packetsInBuffer);
+                if (packetsInBuffer < 5) {
+                    fillUARTQueueWithRegisterInfo();
+                }
+                break;
+            case SimpleDCCPacket.RESPONSE_COMMS_ERROR:
+                int errorType = 0xff & message[1];
+                System.out.println("Comms error from AVR type: "+errorType+" =======================================================");
+                break;
+        }
     }
 
     class TCPReadThread implements Runnable {
@@ -738,14 +770,47 @@ public class DccppServer extends SocketCommsServer {
             running = false;
         }
 
+        /**
+         * Keep reading UART until we've finished a sync message
+         */
+        void readUntilSync() throws IOException {
+
+            int in;
+            int syncPos = 0;
+            while (true) {
+                in = streamIn.read();
+
+                if ((in & 0xff) == SimpleDCCPacket.syncBytes[syncPos]) {
+                    syncPos++;
+
+                    if (syncPos == SimpleDCCPacket.SYNC_BYTES) {
+                        //read all the sync bytes
+                        return;
+                    }
+                } else {
+                    //failed, keep reading
+                    syncPos = 0;
+                }
+            }
+        }
+
         @Override
         public void run() {
             running = true;
             while (running) {
+                try {
+                    readUntilSync();
+                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE);
 
-                //todo
+                    for (int i = 0; i < MESSAGE_SIZE; i++) {
+                        message.put((byte) (streamIn.read() & 0xff));
+                    }
+                    processUARTResponse(message.array());
+                } catch (IOException ex) {
+                    Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                    this.stop();
+                }
             }
-            //TODO design protocol for return AVR-PC comms
 
             this.stop();
         }
@@ -780,7 +845,9 @@ public class DccppServer extends SocketCommsServer {
                 try {
                     ByteBuffer message = uartQueue.take();
                     System.out.println("writing UART out");
-                    streamOut.write(message.array());
+                    byte[] messageBytes = message.array();
+                    System.out.println(messageBytes.length);
+                    streamOut.write(messageBytes);
                     streamOut.flush();
                 } catch (InterruptedException | IOException ex) {
                     Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
