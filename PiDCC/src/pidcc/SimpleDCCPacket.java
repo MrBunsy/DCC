@@ -114,7 +114,7 @@ public class SimpleDCCPacket {
         bb.put((byte) (COMMAND_REQUEST_BUFFER_SIZE & 0xff));
         
         addFooter(bb);
-        System.out.println("crc = "+bb.array()[MESSAGE_SIZE-1]);
+        //System.out.println("crc = "+bb.array()[MESSAGE_SIZE-1]);
         return bb;
     }
     

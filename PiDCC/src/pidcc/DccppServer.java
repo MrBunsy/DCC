@@ -782,15 +782,20 @@ public class DccppServer extends SocketCommsServer {
         } // switch
 
     }
-
+    
+    /**
+     * take an array without sync bytes and check the crc byte is valid
+     * @param message from AVR
+     * @return pass/fail
+     */
     public boolean checkMessageCRC(byte[] message){
         CRC16 crc = new CRC16();
-        //this needs some explaining. the byte array handed here is the backing array from ByteBuffer
-        for (int i=0;i<MESSAGE_SIZE-1-SimpleDCCPacket.SYNC_BYTES;i++){
+        //last byte in the message is the CRC byte
+        for (int i=0;i<message.length-1;i++){
             crc.update(message[i]);
         }
         byte crcResult = crc.getCrc();
-        return message[MESSAGE_SIZE-1-SimpleDCCPacket.SYNC_BYTES]== crcResult;
+        return message[message.length-1]== crcResult;
     }
     
     public void processUARTResponse(byte[] message) {
@@ -911,9 +916,9 @@ public class DccppServer extends SocketCommsServer {
             while (running) {
                 try {
                     readUntilSync();
-                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE);
+                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE-SimpleDCCPacket.SYNC_BYTES);
 
-                    for (int i = 0; i < MESSAGE_SIZE; i++) {
+                    for (int i = 0; i < MESSAGE_SIZE-SimpleDCCPacket.SYNC_BYTES; i++) {
                         message.put((byte) (streamIn.read() & 0xff));
                     }
                     processUARTResponse(message.array());
