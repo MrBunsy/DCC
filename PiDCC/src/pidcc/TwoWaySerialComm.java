@@ -45,7 +45,7 @@ public class TwoWaySerialComm implements CommLink{
                 
                 //this.outWriter = new SerialWriter(out);
                 
-                (new Thread(new InputStreamReader(in,this))).start();
+//                (new Thread(new InputStreamReader(in,this))).start();
                 //(new Thread(this.outWriter)).start();
 
             } else {
