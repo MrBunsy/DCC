@@ -13,6 +13,7 @@
 #include "uart.h"
 #include "SimpleDCC.h"
 #include <string.h>
+#include "ADC.h"
 
 //message data is only part of the message, this is not the size of the full message (which is data + type + sync bytes)
 #define MAX_MESSAGE_DATA_BYTES (MAX_DATA_BYTES_IN_DCC_PACKET + 3)
@@ -104,6 +105,7 @@ typedef struct {
 	//this will hold commandType_t
 	uint8_t commandType;
 	messageDataUnion_t data;
+	uint8_t crc;
 } message_t;
 
 
@@ -115,5 +117,7 @@ void transmitCommsDebug(uint8_t type);
 void transmitCurrentDraw(uint8_t current);
 void bufferInput(void);
 void processMessage(message_t* message);
+bool checkCRC(message_t* message);
+uint8_t calculateCRC(message_t* message);
 
 #endif /* COMMS_H_ */

@@ -6,7 +6,7 @@
 */
 
 #include "comms.h"
-#include "ADC.h"
+#include <util/crc16.h>
 
 
 /************************************************************************/
@@ -119,7 +119,7 @@ message_t readMessage(void) {
 	//sync up!
 	readUntilSync();
 
-	for (i = 0; i<9; i++) {
+	for (i = 0; i<sizeof(message_t); i++) {
 		uint8_t in =  readByteBlocking();
 		*messagePointer = in;
 		messagePointer++;
@@ -152,17 +152,20 @@ void transmitPacketBufferSize(uint8_t size, uint8_t* currentDraw){
 	message.data.packetBufferSizeData.packetsInBuffer = size;
 	message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
 	message.data.genericMessageData.data[2] = currentDraw[1];
+	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);
 }
 
 
-
 void transmitCommsDebug(uint8_t type){
 	message_t message;
 	
+	
+	
 	message.commandType=RESPONSE_COMMS_ERROR;
 	message.data.genericMessageData.data[0]=type;
+	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);
 }
@@ -172,6 +175,7 @@ void transmitCurrentDraw(uint8_t current){
 	
 	message.commandType=REPONSE_CURRENT;
 	message.data.currentDrawData.currentDraw=current;
+	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);
 }
@@ -187,19 +191,43 @@ void transmitMessage(uint8_t* messagePointer){
 	}
 	
 	//send the message
-	
-	for (uint8_t i = 0; i<sizeof (message_t); i++) {
+	//data + command + crc
+	for (uint8_t i = 0; i<MAX_MESSAGE_DATA_BYTES+2; i++) {
 		uart_putc(*messagePointer);
 		messagePointer++;
 	}
 	
 }
 
+bool checkCRC(message_t* message){
+	
+	uint8_t crc = calculateCRC(message);
+	return crc == message->crc;
+	
+}
+
+uint8_t calculateCRC(message_t* message){
+	uint8_t* messagePtr = (uint8_t*)message;
+	
+	uint8_t crc = 0;
+	//data + command
+	for(uint8_t i=0;i<MAX_MESSAGE_DATA_BYTES+1;i++){
+		
+		crc = _crc_ibutton_update(crc,messagePtr[i]);
+	}
+	return crc;
+}
 
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
 	//USART_Transmit('r');
+	
+	if(!checkCRC(message)){
+		transmitCommsDebug(4);
+		return;
+	}
+	
 	switch (message->commandType) {
 
 		case COMMAND_PROGRAMME_DIRECT_BYTE:
