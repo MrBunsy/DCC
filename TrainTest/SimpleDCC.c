@@ -67,12 +67,20 @@ volatile uint8_t bitState;
 
 /*
 * Get a pointer to a position in the packet buffer where we can add a packet.  Also increment packetsInBuffer.
+* blocks if packet buffer is full
 */
 dccPacket_t *getInsertPacketPointer() {
 	while (packetsInBuffer == PACKET_BUFFER_SIZE);
 	dccPacket_t* p = &(packetBuffer[(transmittingPacket + packetsInBuffer) % PACKET_BUFFER_SIZE]);
 	packetsInBuffer++;
 	return p;
+}
+
+/************************************************************************/
+/* returns how many messages are in the buffer                          */
+/************************************************************************/
+uint8_t getPacketsInBuffer(){
+	return packetsInBuffer;
 }
 
 /**
@@ -435,25 +443,25 @@ void runDCCDemo(uint8_t address) {
 		switch (demoState) {
 			case 0:
 			//go forwards!
-			USART_Transmit('f');
+			//USART_Transmit('f');
 			for (i = 0; i < DUPLICATION; i++) {
 				//insertSpeedPacket(address, 15, true, SPEEDMODE_14STEP);
 				insertSpeedPacket(address, 100, true, SPEEDMODE_128STEP);
 			}
 			break;
 			case 3:
-			USART_Transmit('\n');
+			//USART_Transmit('\n');
 			demoState = -1;
 			case 1:
 			//stop
-			USART_Transmit('s');
+			//USART_Transmit('s');
 			for (i = 0; i < DUPLICATION; i++) {
 				insertSpeedPacket(address, 0, true, SPEEDMODE_128STEP);
 			}
 			break;
 			case 2:
 			//go backwards!
-			USART_Transmit('b');
+			//USART_Transmit('b');
 			for (i = 0; i < DUPLICATION; i++) {
 				insertSpeedPacket(address, 100, false, SPEEDMODE_128STEP);
 			}
@@ -731,7 +739,7 @@ ISR(TIMER0_COMPA_vect) {
 	if (temp > MAX_CURRENT || highCurrentDrawMainTrack){
 		highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
-		USART_Transmit((uint8_t)'h');
+		//USART_Transmit((uint8_t)'h');
 		return;
 	}//TODO programming track power draw!
 	

@@ -24,12 +24,30 @@
 #define Rdb(pinp,bitnum)		(pinp & _BV(bitnum))
 #define Invert(port,bitnum)		(port) ^= _BV(bitnum)
 
+//#define bitRead Rdb
+
 #define  ATMEGA168      0
 #define  ATMEGA644		1
 
 #define  PROCESSOR     ATMEGA644
 
+#include "arduino/Arduino.h"
 
+//things from DCCpp_Uno.h
+#define COMM_TYPE 0
+#define INTERFACE Serial
+
+
+//stuff for using dccpp code
+//#define byte uint8_t
+//#ifndef max
+	//#define max(a,b) ((a) > (b) ? (a) : (b))
+//#endif
+//#define SHOW_PACKETS  0
+//#define highByte(b)	((uint8_t)(b >> 8))
+//#define lowByte(b)	((uint8_t)(b  & 0x00ff))
+//
+//#define INTERFACE.print USART_TransmitString
 
 //for debugging :P
 #define DEBUG_LED_FLASH

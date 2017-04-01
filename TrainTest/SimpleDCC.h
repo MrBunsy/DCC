@@ -12,7 +12,7 @@
 
 
 #include "Include.h"
-#include "UART.h"
+#include "uart.h"
 #include "ADC.h"
 
 #if (PROCESSOR == ATMEGA644) 
@@ -66,6 +66,7 @@
 
 
 //buffer needs to be at least 50 to hold all the initialisation packets
+//must be less than uint8 can hold!
 #if (PROCESSOR == ATMEGA644) 
 	#define PACKET_BUFFER_SIZE (128)
 #elif (PROCESSOR == ATMEGA168)
@@ -78,7 +79,7 @@ packet format definition may have a length of between 3 and 6 data bytes each se
  - RP-9.2.1 DCC Extended Packet Format
  (I think address counts as a packet)
  */
-#define MAX_DATA_BYTES (5)
+#define MAX_DATA_BYTES_IN_DCC_PACKET (5)
 
 //minimum of 14 (though one can be last 1 of previous packet)
 #define PREAMBLE_LENGTH (16)
@@ -106,7 +107,7 @@ typedef struct {
     bool longPreamble;
     uint8_t address;
     uint8_t dataBytes; //just the actual data bytes, we will work out the error detection byte at transmission time
-    uint8_t data[MAX_DATA_BYTES];
+    uint8_t data[MAX_DATA_BYTES_IN_DCC_PACKET];
     //note that an error detection byte is a different type of data byte
 } dccPacket_t;
 
@@ -117,6 +118,7 @@ void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mo
 void insertLightsPacket(uint8_t address, bool on);
 void insertResetPacket(bool longPreamble);
 dccPacket_t *getInsertPacketPointer();
+uint8_t getPacketsInBuffer();
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
 void waitForSafeToInsert();
 void emergencyCutPower(bool mainTrack);
