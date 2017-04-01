@@ -5,13 +5,19 @@ import java.util.ArrayList;
 
 /**
  * Represents a DCC decoder. Holds speed, direction and functions
+ * 
+ * Dccpp has a system where this have their own index, despite always supplying cab address.
+ * this doesn't mesh well when there isn't a register for lights, so I'm 
+ * choosing to entirely ignore the register address and cache everythign based on decoder address
+ * 
+ * cab == decoder
  *
  * TODO also have my own system for points and signals (think signals are
  * accessory decoders?)
  *
  * @author Luke
  */
-public class Register {
+public class Cab {
 
     public int speed;
     public int address;
@@ -21,7 +27,7 @@ public class Register {
     private static int REPEATS = 2;
 //    private static int MAX_SPEED = 127; //using speed mode 128
 
-    public Register() {
+    public Cab() {
         this.functions = new boolean[24];
         this.maxFunctionsUsed = 0;
         this.address = 0;
@@ -68,6 +74,10 @@ public class Register {
      */
     public synchronized void setAddress(int address) {
         this.address = address;
+    }
+    
+    public synchronized int getAddress(){
+        return address;
     }
     
     public synchronized ByteBuffer getSpeedMessage(){

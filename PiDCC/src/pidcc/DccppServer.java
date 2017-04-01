@@ -24,7 +24,7 @@ import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
  */
 public class DccppServer extends SocketCommsServer {
 
-    private Register[] registerList;
+    private Cab[] cabList;
     private final static int MAX_MAIN_REGISTERS = 100;
     private boolean mainTrackEnabled = false;
     private boolean progTrackEnabled = false;
@@ -34,11 +34,11 @@ public class DccppServer extends SocketCommsServer {
     public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
         super(socket, serialComms);
 
-        this.registerList = new Register[MAX_MAIN_REGISTERS];
+        this.cabList = new Cab[MAX_MAIN_REGISTERS];
         this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
 
         for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
-            this.registerList[i] = new Register();
+            this.cabList[i] = new Cab();
         }
     }
 
@@ -67,7 +67,7 @@ public class DccppServer extends SocketCommsServer {
 
 //                fillUARTQueue();
                 requestAVRPacketBufferSize();
-                
+
             }
             try {
                 //TODO ...do this better. A proper wait?
@@ -79,11 +79,15 @@ public class DccppServer extends SocketCommsServer {
 
         System.out.println("Stopping Dccpp Server");
     }
-    
-    public void requestAVRPacketBufferSize(){
-        uartQueue.add(SimpleDCCPacket.requestAVRPacketBufferSize());
+
+    public void requestAVRPacketBufferSize() {
+        try {
+            uartQueue.put(SimpleDCCPacket.requestAVRPacketBufferSize());
+        } catch (InterruptedException ex) {
+            Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
-    
+
     /**
      * Trundle through the registers to generate some packets to give to the AVR
      * TODO locks! the registers are accessed from two different threads
@@ -92,7 +96,7 @@ public class DccppServer extends SocketCommsServer {
         ArrayList<ByteBuffer> messages = new ArrayList<>();
 
         //trundle through the registers to get some new messages to add to the queue
-        for (Register r : this.registerList) {
+        for (Cab r : this.cabList) {
             if (r.inUse()) {
                 ArrayList<ByteBuffer> registerMessages = r.getSimpleDCCPackets();
                 messages.addAll(registerMessages);
@@ -100,9 +104,13 @@ public class DccppServer extends SocketCommsServer {
             }
         }
         for (ByteBuffer message : messages) {
-            //TODO check queue large enough, with ltos of registers could eaisly not be
-            //need proper system there
-            uartQueue.add(message);
+            try {
+                //TODO check queue large enough, with ltos of registers could eaisly not be
+                //need proper system there
+                uartQueue.put(message);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
     }
 
@@ -141,6 +149,43 @@ public class DccppServer extends SocketCommsServer {
         }
     }
 
+    /**
+     * Find a register for a decoder address, if none found set up next register
+     * and return it
+     *
+     * @param address
+     * @return
+     */
+    private Cab findCabFor(int address) {
+        for (Cab r : cabList) {
+            if (r.getAddress() == address) {
+                return r;
+            }
+        }
+        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
+            if (!cabList[i].inUse()) {
+                cabList[i].setAddress(address);
+                return cabList[i];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Transmit a SimpleDCC message to the AVR now
+     *
+     * @param packet
+     */
+    private void transmitMessageNow(ByteBuffer message) {
+        try {
+            //send this one right now, to reduce delay from the throttle
+            //I think this will be fine, as any old messges will be furhter ahead in the queue and any after this will ahve the new speedvalue
+            uartQueue.put(message);
+        } catch (InterruptedException ex) {
+            Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
     private void processDccppCommand(String command) {
         command = tidyCommand(command);
 
@@ -155,7 +200,9 @@ public class DccppServer extends SocketCommsServer {
             Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, "Invalid command");
         }
         int register;
-        int cab;
+        int cabAddress;
+        Cab cab;
+        
         switch (splitCommand[0].charAt(0)) {
 
             /**
@@ -175,16 +222,18 @@ public class DccppServer extends SocketCommsServer {
                  */
                 //      mRegs->setThrottle(com+1);
                 register = Integer.parseInt(splitCommand[1]);
-                cab = Integer.parseInt(splitCommand[2]);
+                   
+                //IGNORING the register, we're caching it with the DCC address of the cab instead
+                
+                cabAddress = Integer.parseInt(splitCommand[2]);
+                cab = findCabFor(cabAddress);
                 int speed = Integer.parseInt(splitCommand[3]);
                 boolean forwards = Integer.parseInt(splitCommand[4]) == 1;
 
-                this.registerList[register].setSpeed(speed, forwards);
-                this.registerList[register].setAddress(cab);
-                
-                //send this one right now, to reduce delay from the throttle
-                //I think this will be fine, as any old messges will be furhter ahead in the queue and any after this will ahve the new speedvalue
-                uartQueue.add(this.registerList[register].getSpeedMessage());
+                cab.setSpeed(speed, forwards);
+                cab.setAddress(cabAddress);
+
+                transmitMessageNow(cab.getSpeedMessage());
 
                 this.returnString("<T " + register + " " + speed + " " + (forwards ? 1 : 0) + ">");
                 break;
@@ -203,30 +252,63 @@ public class DccppServer extends SocketCommsServer {
  *      
  *    BYTE1:  128 + F1*1 + F2*2 + F3*4 + F4*8 + F0*16
  *    BYTE2:  omitted
+                binary: 1 0 0 f0 f4 f3 f2 f1
  *   
  *    To set functions F5-F8 on (=1) or off (=0):
  *   
  *    BYTE1:  176 + F5*1 + F6*2 + F7*4 + F8*8
  *    BYTE2:  omitted
+                binary: 1 0 1 1 f8 f7 f6 f5
  *   
  *    To set functions F9-F12 on (=1) or off (=0):
  *   
  *    BYTE1:  160 + F9*1 +F10*2 + F11*4 + F12*8
  *    BYTE2:  omitted
+                binary: 1 0 1 0 f12 f11 f10 f9
  *   
  *    To set functions F13-F20 on (=1) or off (=0):
  *   
- *    BYTE1: 222 
+ *    BYTE1: 222 (1101 1110)
  *    BYTE2: F13*1 + F14*2 + F15*4 + F16*8 + F17*16 + F18*32 + F19*64 + F20*128
  *   
  *    To set functions F21-F28 on (=1) of off (=0):
  *   
- *    BYTE1: 223
+ *    BYTE1: 223 (1101 1111)
  *    BYTE2: F21*1 + F22*2 + F23*4 + F24*8 + F25*16 + F26*32 + F27*64 + F28*128
  *   
  *    returns: NONE
  * 
                  */
+
+                cabAddress = Integer.parseInt(splitCommand[1]);
+
+                cab = findCabFor(cabAddress);
+
+                int byte1 = Integer.parseInt(splitCommand[2]);
+                boolean f13AndAbove = false;
+                if (byte1 == 222 || byte1 == 223) {
+                    f13AndAbove = true;
+                    int byte2 = Integer.parseInt(splitCommand[3]);
+                }
+
+                if (!f13AndAbove) {
+                    if ((byte1 & 0xe0) == 128) {
+                        //functions 0-4
+                        //could turn this into a loop, hardly seems worth it given the mismatch and f0 being in the wrong place
+                        //set the functions for the relevant bits
+                        cab.setFunction(1, (byte1 & 0x1 << 0) > 0);
+                        cab.setFunction(2, (byte1 & 0x1 << 1) > 0);
+                        cab.setFunction(3, (byte1 & 0x1 << 2) > 0);
+                        cab.setFunction(4, (byte1 & 0x1 << 3) > 0);
+                        //lights :) (probably the only one that's actually ever going to be used)
+                        cab.setFunction(0, (byte1 & 0x1 << 4) > 0);
+                        //send it straight away
+                        transmitMessageNow(cab.getFunction0_4Message());
+                    }
+                } else {
+
+                }
+
 //      mRegs->setFunction(com+1);
                 break;
 
@@ -471,18 +553,18 @@ public class DccppServer extends SocketCommsServer {
 //        INTERFACE.print("<p1>");
 //
                 for (int i = 1; i < MAX_MAIN_REGISTERS; i++) {
-                    if (this.registerList[i].speed == 0) {
+                    if (this.cabList[i].speed == 0) {
                         continue;
                     }
                     StringBuilder s = new StringBuilder();
                     s.append("<T");
                     s.append(i);
                     s.append(" ");
-                    if (this.registerList[i].speed > 0) {
-                        s.append(this.registerList[i].speed);
+                    if (this.cabList[i].speed > 0) {
+                        s.append(this.cabList[i].speed);
                         s.append(" 1>");
                     } else {
-                        s.append(-this.registerList[i].speed);
+                        s.append(-this.cabList[i].speed);
                         s.append(" 0>");
                     }
                     this.returnString(s.toString());
@@ -716,7 +798,7 @@ public class DccppServer extends SocketCommsServer {
                 break;
             case SimpleDCCPacket.RESPONSE_COMMS_ERROR:
                 int errorType = 0xff & message[1];
-                System.out.println("Comms error from AVR type: "+errorType+" =======================================================");
+                System.out.println("Comms error from AVR type: " + errorType + " =======================================================");
                 break;
         }
     }
