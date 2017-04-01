@@ -86,11 +86,8 @@ int main(void) {
 
 	while (1) {
 		
-		//if data received over UART, process it
-		if(USART_DataInAvailable()){
-			//note, this will still block when waiting for the sync bytes, there is no timeout there yet
-			processInput(false);
-		}
+		bufferInput();
+		processInput();
 		//I'd like to do current checking here, but while processInput could potentially block it's best left in the DCC 'thread'
 		//I think processInput will potentially only block if garbage is on the serial port, so if a proper message is sent at startup, that might clear it?
 		

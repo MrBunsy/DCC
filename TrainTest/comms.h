@@ -34,6 +34,10 @@ typedef enum {
 #define SYNC_INT (0xffccccff)
 #define NUM_SYNC_BYTES (4)
 
+//sync bytes + data + command type
+#define FULL_MESSAGE_LENGTH (MAX_MESSAGE_DATA_BYTES + NUM_SYNC_BYTES + 1)
+
+#define INPUT_BUFFER_SIZE (30)
 /*
 * Max size any message data can be
 */
@@ -98,6 +102,9 @@ typedef struct {
 void transmitMessage(uint8_t* messagePointer);
 void transmitPacketBufferSize(uint8_t size);
 message_t readMessage(void);
-void processInput(bool blocking);
+void processInput(void);
 void transmitCommsDebug(void);
+void bufferInput(void);
+void processMessage(message_t* message);
+
 #endif /* COMMS_H_ */
