@@ -24,22 +24,25 @@ import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
  */
 public class DccppServer extends SocketCommsServer {
 
-    private Cab[] cabList;
-    private final static int MAX_MAIN_REGISTERS = 100;
+    //currently a static list, TODO make it dynamic now we're not using the register system.
+    private ArrayList<Cab> cabList;
+//    private final static int MAX_MAIN_REGISTERS = 100;
     private boolean mainTrackEnabled = false;
     private boolean progTrackEnabled = false;
     private ArrayBlockingQueue<ByteBuffer> uartQueue;
     private final static int UART_QUEUE_LENGTH = 10;
+    private ArrayList<Turnout> turnoutList;
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
         super(socket, serialComms);
 
-        this.cabList = new Cab[MAX_MAIN_REGISTERS];
+        this.cabList = new ArrayList<>();
         this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
+        this.turnoutList = new ArrayList<>();
 
-        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
-            this.cabList[i] = new Cab();
-        }
+//        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
+//            this.cabList[i] = new Cab();
+//        }
     }
 
     /**
@@ -162,13 +165,11 @@ public class DccppServer extends SocketCommsServer {
                 return r;
             }
         }
-        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
-            if (!cabList[i].inUse()) {
-                cabList[i].setAddress(address);
-                return cabList[i];
-            }
-        }
-        return null;
+        //none in cablist, add new entry
+        Cab c = new Cab();
+        c.setAddress(address);
+        cabList.add(c);
+        return c;
     }
 
     /**
@@ -352,6 +353,7 @@ public class DccppServer extends SocketCommsServer {
  *    returns: NONE
                  */
 //      mRegs->setAccessory(com+1);
+                //not supporting accessory decoders atm, nothing to do here
                 break;
 
             /**
@@ -370,6 +372,7 @@ public class DccppServer extends SocketCommsServer {
  *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
                  */
 //      Turnout::parse(com+1);
+                //TODO - combine with my plans for controlling points!
                 break;
 
             /**
@@ -388,6 +391,8 @@ public class DccppServer extends SocketCommsServer {
  *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
                  */
 //      Output::parse(com+1);
+                //just say it doesn't exist, no plans to support this yet
+                this.returnString("<X>");
                 break;
 
             /**
@@ -399,6 +404,7 @@ public class DccppServer extends SocketCommsServer {
  *   USED TO CREATE/EDIT/REMOVE/SHOW SENSOR DEFINITIONS
                  */
 //      Sensor::parse(com+1);
+                //major TODO, but not urgent
                 break;
 
             /**
@@ -568,19 +574,20 @@ public class DccppServer extends SocketCommsServer {
 //      else
 //        INTERFACE.print("<p1>");
 //
-                for (int i = 1; i < MAX_MAIN_REGISTERS; i++) {
-                    if (this.cabList[i].speed == 0) {
+                for (int i = 1; i < cabList.size(); i++) {
+                    if (this.cabList.get(i).speed == 0) {
                         continue;
                     }
                     StringBuilder s = new StringBuilder();
                     s.append("<T");
+                    //pretend this is a dccpp register
                     s.append(i);
                     s.append(" ");
-                    if (this.cabList[i].speed > 0) {
-                        s.append(this.cabList[i].speed);
+                    if (this.cabList.get(i).speed > 0) {
+                        s.append(this.cabList.get(i).speed);
                         s.append(" 1>");
                     } else {
-                        s.append(-this.cabList[i].speed);
+                        s.append(-this.cabList.get(i).speed);
                         s.append(" 0>");
                     }
                     this.returnString(s.toString());
@@ -814,7 +821,7 @@ public class DccppServer extends SocketCommsServer {
                 break;
             case SimpleDCCPacket.RESPONSE_COMMS_ERROR:
                 int errorType = 0xff & message[1];
-                System.out.println("Comms error from AVR type: " + errorType + " =======================================================");
+                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Comms error from AVR type: {0}", errorType);
                 break;
         }
     }
@@ -942,9 +949,9 @@ public class DccppServer extends SocketCommsServer {
 
                 try {
                     ByteBuffer message = uartQueue.take();
-                    System.out.println("writing UART out");
+//                    System.out.println("writing UART out");
                     byte[] messageBytes = message.array();
-                    System.out.println(messageBytes.length);
+//                    System.out.println(messageBytes.length);
                     streamOut.write(messageBytes);
                     streamOut.flush();
                 } catch (InterruptedException | IOException ex) {
