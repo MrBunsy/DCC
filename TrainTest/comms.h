@@ -10,7 +10,7 @@
 #define COMMS_H_
 
 #include "Include.h"
-#include "UART.h"
+#include "uart.h"
 #include "SimpleDCC.h"
 #include <string.h>
 
@@ -37,7 +37,7 @@ typedef enum {
 //sync bytes + data + command type
 #define FULL_MESSAGE_LENGTH (MAX_MESSAGE_DATA_BYTES + NUM_SYNC_BYTES + 1)
 
-#define INPUT_BUFFER_SIZE (30)
+#define INPUT_BUFFER_SIZE (80)
 /*
 * Max size any message data can be
 */
@@ -103,7 +103,7 @@ void transmitMessage(uint8_t* messagePointer);
 void transmitPacketBufferSize(uint8_t size);
 message_t readMessage(void);
 void processInput(void);
-void transmitCommsDebug(void);
+void transmitCommsDebug(uint8_t type);
 void bufferInput(void);
 void processMessage(message_t* message);
 

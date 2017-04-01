@@ -161,10 +161,10 @@
     <Compile Include="SimpleDCC.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="UART.c">
+    <Compile Include="uart.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="UART.h">
+    <Compile Include="uart.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>

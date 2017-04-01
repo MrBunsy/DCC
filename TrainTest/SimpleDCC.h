@@ -12,7 +12,7 @@
 
 
 #include "Include.h"
-#include "UART.h"
+#include "uart.h"
 #include "ADC.h"
 
 #if (PROCESSOR == ATMEGA644) 

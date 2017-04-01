@@ -73,7 +73,7 @@ void printADCValue(){
 	//}
 	sprintf(adcbuffer, "%d abc\n", ADCH);
 	for(int i=0;i<8;i++){
-		USART_Transmit(adcbuffer[i]);
+		//USART_Transmit(adcbuffer[i]);
 	}
 	
 }
