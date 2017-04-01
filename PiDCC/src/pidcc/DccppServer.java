@@ -782,18 +782,43 @@ public class DccppServer extends SocketCommsServer {
         } // switch
 
     }
-
+    
+    /**
+     * take an array without sync bytes and check the crc byte is valid
+     * @param message from AVR
+     * @return pass/fail
+     */
+    public boolean checkMessageCRC(byte[] message){
+        CRC16 crc = new CRC16();
+        //last byte in the message is the CRC byte
+        for (int i=0;i<message.length-1;i++){
+            crc.update(message[i]);
+        }
+        byte crcResult = crc.getCrc();
+        return message[message.length-1]== crcResult;
+    }
+    
     public void processUARTResponse(byte[] message) {
+        if(!checkMessageCRC(message)){
+            Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Message from AVR failed CRC");
+            return;
+        }
         int responseType = 0xff & message[0];
 
         switch (responseType) {
             case SimpleDCCPacket.RESPONSE_PACKET_BUFFER_SIZE:
                 int packetsInBuffer = 0xff & message[1];
-                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}", packetsInBuffer);
+                
                 int currentDraw = (0xff & message[2]) | (message[3]<<8);
                 //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
                 //currentDraw = currentDraw << 2;
-                System.out.println("Received current draw of " + currentDraw);
+//                System.out.println("Received current draw of " + currentDraw);
+                //gain of 11 on voltage over 0.15ohm resistor
+                //1024bit ADC 0-3.3v (assuming 3.3v supply)
+                double voltsMeasured = (((double)currentDraw)/1024)*3.3;
+                double amps = (voltsMeasured/11.0)/0.15;
+                
+                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: "+currentDraw+" = "+amps+"A", packetsInBuffer);
                 updateCurrentDraw(currentDraw);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
@@ -891,9 +916,9 @@ public class DccppServer extends SocketCommsServer {
             while (running) {
                 try {
                     readUntilSync();
-                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE);
+                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE-SimpleDCCPacket.SYNC_BYTES);
 
-                    for (int i = 0; i < MESSAGE_SIZE; i++) {
+                    for (int i = 0; i < MESSAGE_SIZE-SimpleDCCPacket.SYNC_BYTES; i++) {
                         message.put((byte) (streamIn.read() & 0xff));
                     }
                     processUARTResponse(message.array());
