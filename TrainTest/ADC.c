@@ -46,7 +46,7 @@ void adc_init(){
 	Setb(ADCSRA, ADEN);
 	
 	//enable interrupt
-	//Setb(ADCSRA, ADIE);
+	Setb(ADCSRA, ADIE);
 	
 	
 	//ADC will auto trigger from the source
@@ -80,10 +80,11 @@ void printADCValue(){
 //uint16_t currentCheckCount = 0;
 ISR(ADC_vect)
 {
-	if (ADCH > MAX_CURRENT){
+	/*if (ADCH > MAX_CURRENT){
 		highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
 		//USART_Transmit("h");
-	}
+	}*/
+	currentDrawValue = ((ADCH << 2)& 0xfc) | ((ADCL>>6) & 0x03);
 
 }

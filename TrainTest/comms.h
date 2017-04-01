@@ -26,9 +26,12 @@ typedef enum {
 	COMMAND_EMERGENCY_STOP,
 	COMMAND_ENTER_SERVICE_MODE,
 	COMMAND_REQUEST_BUFFER_SIZE,
+	COMMAND_REQUEST_CURRENT,
 	
 	RESPONSE_PACKET_BUFFER_SIZE, //inform the listener how many packets are currently in the buffer
 	RESPONSE_COMMS_ERROR,
+	//current current draw measured from ADC
+	REPONSE_CURRENT,
 } commandType_t;
 
 //used for finding the start of a packet:
@@ -78,8 +81,11 @@ typedef struct{
 
 typedef struct{
 	uint8_t packetsInBuffer;
-}packetBufferSize_t;
+}packetBufferSizeData_t;
 
+typedef struct{
+	uint8_t currentDraw;
+}currentDrawData_t;
 
 typedef union {
 	genericMessageData_t genericMessageData;
@@ -88,7 +94,8 @@ typedef union {
 	newAddressMessageData_t newAddressMessageData;
 	opsModePacketMessageData_t opsModePacketMessageData;
 	programmeDirectByteMessageData_t programmeDirectByteMessageData;
-	packetBufferSize_t packetBufferSizeData;
+	packetBufferSizeData_t packetBufferSizeData;
+	currentDrawData_t currentDrawData;
 } messageDataUnion_t;
 
 //#pragma pack(1)
@@ -101,10 +108,11 @@ typedef struct {
 
 
 void transmitMessage(uint8_t* messagePointer);
-void transmitPacketBufferSize(uint8_t size);
+void transmitPacketBufferSize(uint8_t size, uint8_t* current);
 message_t readMessage(void);
 void processInput(void);
 void transmitCommsDebug(uint8_t type);
+void transmitCurrentDraw(uint8_t current);
 void bufferInput(void);
 void processMessage(message_t* message);
 

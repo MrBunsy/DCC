@@ -6,7 +6,7 @@
 */
 
 #include "comms.h"
-
+#include "ADC.h"
 
 
 /************************************************************************/
@@ -145,11 +145,13 @@ bool areSyncBytes(uint8_t* bytes){
 /************************************************************************/
 /* Transmit the current size of the packet buffer back to the listener  */
 /************************************************************************/
-void transmitPacketBufferSize(uint8_t size){
+void transmitPacketBufferSize(uint8_t size, uint8_t* currentDraw){
 	message_t message;
 	
 	message.commandType=RESPONSE_PACKET_BUFFER_SIZE;
 	message.data.packetBufferSizeData.packetsInBuffer = size;
+	message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
+	message.data.genericMessageData.data[2] = currentDraw[1];
 	
 	transmitMessage((uint8_t*)&message);
 }
@@ -165,6 +167,14 @@ void transmitCommsDebug(uint8_t type){
 	transmitMessage((uint8_t*)&message);
 }
 
+void transmitCurrentDraw(uint8_t current){
+	message_t message;
+	
+	message.commandType=REPONSE_CURRENT;
+	message.data.currentDrawData.currentDraw=current;
+	
+	transmitMessage((uint8_t*)&message);
+}
 /************************************************************************/
 /* Transmit a message over UART                                         */
 /************************************************************************/
@@ -246,6 +256,9 @@ void processMessage(message_t* message){
 		break;
 		case COMMAND_REQUEST_BUFFER_SIZE:
 		//nothing to actually do, this is done in response to every single message atm
+		break;
+		case COMMAND_REQUEST_CURRENT:
+//		transmitCurrentDraw(adc_read());
 		break;
 		default:
 		transmitCommsDebug(2);
