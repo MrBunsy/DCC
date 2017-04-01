@@ -202,7 +202,7 @@ public class DccppServer extends SocketCommsServer {
         int register;
         int cabAddress;
         Cab cab;
-        
+
         switch (splitCommand[0].charAt(0)) {
 
             /**
@@ -222,9 +222,8 @@ public class DccppServer extends SocketCommsServer {
                  */
                 //      mRegs->setThrottle(com+1);
                 register = Integer.parseInt(splitCommand[1]);
-                   
+
                 //IGNORING the register, we're caching it with the DCC address of the cab instead
-                
                 cabAddress = Integer.parseInt(splitCommand[2]);
                 cab = findCabFor(cabAddress);
                 int speed = Integer.parseInt(splitCommand[3]);
@@ -242,42 +241,42 @@ public class DccppServer extends SocketCommsServer {
              * *** OPERATE ENGINE DECODER FUNCTIONS F0-F28 ***
              */
             case 'f':       // <f CAB BYTE1 [BYTE2]>
-/*
- *    turns on and off engine decoder functions F0-F28 (F0 is sometimes called FL)  
- *    NOTE: setting requests transmitted directly to mobile engine decoder --- current state of engine functions is not stored by this program
- *    
- *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder
- *    
- *    To set functions F0-F4 on (=1) or off (=0):
- *      
- *    BYTE1:  128 + F1*1 + F2*2 + F3*4 + F4*8 + F0*16
- *    BYTE2:  omitted
-                binary: 1 0 0 f0 f4 f3 f2 f1
- *   
- *    To set functions F5-F8 on (=1) or off (=0):
- *   
- *    BYTE1:  176 + F5*1 + F6*2 + F7*4 + F8*8
- *    BYTE2:  omitted
-                binary: 1 0 1 1 f8 f7 f6 f5
- *   
- *    To set functions F9-F12 on (=1) or off (=0):
- *   
- *    BYTE1:  160 + F9*1 +F10*2 + F11*4 + F12*8
- *    BYTE2:  omitted
-                binary: 1 0 1 0 f12 f11 f10 f9
- *   
- *    To set functions F13-F20 on (=1) or off (=0):
- *   
- *    BYTE1: 222 (1101 1110)
- *    BYTE2: F13*1 + F14*2 + F15*4 + F16*8 + F17*16 + F18*32 + F19*64 + F20*128
- *   
- *    To set functions F21-F28 on (=1) of off (=0):
- *   
- *    BYTE1: 223 (1101 1111)
- *    BYTE2: F21*1 + F22*2 + F23*4 + F24*8 + F25*16 + F26*32 + F27*64 + F28*128
- *   
- *    returns: NONE
- * 
+                /*
+                 *    turns on and off engine decoder functions F0-F28 (F0 is sometimes called FL)  
+                 *    NOTE: setting requests transmitted directly to mobile engine decoder --- current state of engine functions is not stored by this program
+                 *    
+                 *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder
+                 *    
+                 *    To set functions F0-F4 on (=1) or off (=0):
+                 *      
+                 *    BYTE1:  128 + F1*1 + F2*2 + F3*4 + F4*8 + F0*16
+                 *    BYTE2:  omitted
+                                binary: 1 0 0 f0 f4 f3 f2 f1
+                 *   
+                 *    To set functions F5-F8 on (=1) or off (=0):
+                 *   
+                 *    BYTE1:  176 + F5*1 + F6*2 + F7*4 + F8*8
+                 *    BYTE2:  omitted
+                                binary: 1 0 1 1 f8 f7 f6 f5
+                 *   
+                 *    To set functions F9-F12 on (=1) or off (=0):
+                 *   
+                 *    BYTE1:  160 + F9*1 +F10*2 + F11*4 + F12*8
+                 *    BYTE2:  omitted
+                                binary: 1 0 1 0 f12 f11 f10 f9
+                 *   
+                 *    To set functions F13-F20 on (=1) or off (=0):
+                 *   
+                 *    BYTE1: 222 (1101 1110)
+                 *    BYTE2: F13*1 + F14*2 + F15*4 + F16*8 + F17*16 + F18*32 + F19*64 + F20*128
+                 *   
+                 *    To set functions F21-F28 on (=1) of off (=0):
+                 *   
+                 *    BYTE1: 223 (1101 1111)
+                 *    BYTE2: F21*1 + F22*2 + F23*4 + F24*8 + F25*16 + F26*32 + F27*64 + F28*128
+                 *   
+                 *    returns: NONE
+                 * 
                  */
 
                 cabAddress = Integer.parseInt(splitCommand[1]);
@@ -285,29 +284,46 @@ public class DccppServer extends SocketCommsServer {
                 cab = findCabFor(cabAddress);
 
                 int byte1 = Integer.parseInt(splitCommand[2]);
-                boolean f13AndAbove = false;
+                int byte2 = 0;
                 if (byte1 == 222 || byte1 == 223) {
-                    f13AndAbove = true;
-                    int byte2 = Integer.parseInt(splitCommand[3]);
+                    byte2 = Integer.parseInt(splitCommand[3]);
                 }
-
-                if (!f13AndAbove) {
-                    if ((byte1 & 0xe0) == 128) {
-                        //functions 0-4
-                        //could turn this into a loop, hardly seems worth it given the mismatch and f0 being in the wrong place
-                        //set the functions for the relevant bits
-                        cab.setFunction(1, (byte1 & 0x1 << 0) > 0);
-                        cab.setFunction(2, (byte1 & 0x1 << 1) > 0);
-                        cab.setFunction(3, (byte1 & 0x1 << 2) > 0);
-                        cab.setFunction(4, (byte1 & 0x1 << 3) > 0);
-                        //lights :) (probably the only one that's actually ever going to be used)
-                        cab.setFunction(0, (byte1 & 0x1 << 4) > 0);
-                        //send it straight away
-                        transmitMessageNow(cab.getFunction0_4Message());
+                if ((byte1 & 0xe0) == 128) {
+                    //functions 0-4
+                    //set the functions for the relevant bits
+                    for (int i = 0; i < 4; i++) {
+                        cab.setFunction(i + 1, (byte1 & 0x1 << i) > 0);
                     }
-                } else {
-
+                    //lights :) (probably the only one that's actually ever going to be used)
+                    cab.setFunction(0, (byte1 & 0x1 << 4) > 0);
+                    //send it straight away
+                    transmitMessageNow(cab.getFunction0_4Message());
+                } else if ((byte1 & 0xf0) == 176) {
+                    //functions 5 to 8
+                    for (int i = 0; i < 4; i++) {
+                        cab.setFunction(i + 5, (byte1 & 0x1 << i) > 0);
+                    }
+                    transmitMessageNow(cab.getFunction5_8Message());
+                } else if ((byte1 & 0xf0) == 160) {
+                    //functions 9 to 12
+                    for (int i = 0; i < 4; i++) {
+                        cab.setFunction(i + 9, (byte1 & 0x1 << i) > 0);
+                    }
+                    transmitMessageNow(cab.getFunction9_12Message());
+                } else if ((byte1 & 0xff) == 222) {
+                    //functions F13-F20
+                    for (int i = 0; i < 8; i++) {
+                        cab.setFunction(i + 13, (byte2 & 0x1 << i) > 0);
+                    }
+                    transmitMessageNow(cab.getFunction13_20Message());
+                } else if ((byte1 & 0xff) == 223) {
+                    //functions F21-F28
+                    for (int i = 0; i < 8; i++) {
+                        cab.setFunction(i + 21, (byte2 & 0x1 << i) > 0);
+                    }
+                    transmitMessageNow(cab.getFunction21_28Message());
                 }
+//                }
 
 //      mRegs->setFunction(com+1);
                 break;
