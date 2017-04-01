@@ -6,7 +6,7 @@
 */
 
 #include "comms.h"
-uint32_t syncBytes = SYNC_INT;
+
 
 
 /************************************************************************/
@@ -72,7 +72,7 @@ uint8_t readByteBlocking(){
 * Keep reading UART until we've finished a sync message
 */
 void readUntilSync() {
-
+	static volatile uint32_t syncBytes = SYNC_INT;
 	uint8_t * syncPointer = (uint8_t*) & syncBytes;
 
 	uint8_t testBytes[NUM_SYNC_BYTES];
@@ -130,6 +130,7 @@ message_t readMessage(void) {
 
 
 bool areSyncBytes(uint8_t* bytes){
+	static volatile uint32_t syncBytes = SYNC_INT;
 	uint8_t * syncPointer = (uint8_t*) & syncBytes;
 	for(uint8_t j=0;j<NUM_SYNC_BYTES;j++){
 		if (bytes[j] != *(syncPointer + j)) {
@@ -168,7 +169,7 @@ void transmitCommsDebug(uint8_t type){
 /* Transmit a message over UART                                         */
 /************************************************************************/
 void transmitMessage(uint8_t* messagePointer){
-	
+	static volatile uint32_t syncBytes = SYNC_INT;
 	//send the sync bytes
 	uint8_t * syncPointer = (uint8_t*) & syncBytes;
 	for(uint8_t i=0;i<NUM_SYNC_BYTES;i++){
@@ -243,6 +244,9 @@ void processMessage(message_t* message){
 		enterServiceMode();
 
 		break;
+		case COMMAND_REQUEST_BUFFER_SIZE:
+		//nothing to actually do, this is done in response to every single message atm
+		break;
 		default:
 		transmitCommsDebug(2);
 		break;
@@ -250,16 +254,56 @@ void processMessage(message_t* message){
 }
 
 
-#ifdef commsworking
+
 uint8_t inputBuffer[INPUT_BUFFER_SIZE];
 uint8_t inputBufferEndPosition = 0;
 uint8_t inputBufferStartPosition = 0;
 
 void bufferInput(void){
-	while(USART_DataInAvailable()){
-		inputBuffer[inputBufferEndPosition] = USART_ReceiveNonBlock();
-		inputBufferEndPosition++;
-	}
+	uint16_t c;
+	
+	c = uart_getc();
+        if ( c & UART_NO_DATA )
+        {
+            /* 
+             * no data available from UART 
+             */
+        }
+        else
+        {
+            /*
+             * new data available from UART
+             * check for Frame or Overrun error
+             */
+            if ( c & UART_FRAME_ERROR )
+            {
+                /* Framing Error detected, i.e no stop bit detected */
+                //uart_puts_P("UART Frame Error: ");
+            }
+            if ( c & UART_OVERRUN_ERROR )
+            {
+                /* 
+                 * Overrun, a character already present in the UART UDR register was 
+                 * not read by the interrupt handler before the next character arrived,
+                 * one or more received characters have been dropped
+                 */
+                //uart_puts_P("UART Overrun Error: ");
+            }
+            if ( c & UART_BUFFER_OVERFLOW )
+            {
+                /* 
+                 * We are not reading the receive buffer fast enough,
+                 * one or more received character have been dropped 
+                 */
+                //uart_puts_P("Buffer overflow error: ");
+            }
+            /* 
+             * c is available!
+             */
+			//return (uint8_t)c;
+			inputBuffer[inputBufferEndPosition] = (uint8_t)c;
+			inputBufferEndPosition++;
+        }
 }
 
 void processInput(void){
@@ -290,7 +334,7 @@ void processInput(void){
 
 
 
-
+#ifdef commsworking
 /*
 * Take control and just sit there processing input from uart
 */

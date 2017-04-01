@@ -142,14 +142,18 @@ int main(void) {
     }
 	#endif
 	
-	
+	#define BLOCKING_COMMS
 	
 	while (1) {
 		
-		//bufferInput();
-		//processInput();
+		
+		#ifdef BLOCKING_COMMS
 		message_t message = readMessage();
 		processMessage(&message);
+		#else
+		bufferInput();
+		processInput();
+		#endif
 		//I'd like to do current checking here, but while processInput could potentially block it's best left in the DCC 'thread'
 		//I think processInput will potentially only block if garbage is on the serial port, so if a proper message is sent at startup, that might clear it?
 		

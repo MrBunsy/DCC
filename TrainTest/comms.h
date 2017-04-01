@@ -25,6 +25,7 @@ typedef enum {
 	COMMAND_ENABLE_LIGHTS,
 	COMMAND_EMERGENCY_STOP,
 	COMMAND_ENTER_SERVICE_MODE,
+	COMMAND_REQUEST_BUFFER_SIZE,
 	
 	RESPONSE_PACKET_BUFFER_SIZE, //inform the listener how many packets are currently in the buffer
 	RESPONSE_COMMS_ERROR,
@@ -37,7 +38,7 @@ typedef enum {
 //sync bytes + data + command type
 #define FULL_MESSAGE_LENGTH (MAX_MESSAGE_DATA_BYTES + NUM_SYNC_BYTES + 1)
 
-#define INPUT_BUFFER_SIZE (80)
+#define INPUT_BUFFER_SIZE (30)
 /*
 * Max size any message data can be
 */
