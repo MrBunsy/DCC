@@ -11,7 +11,8 @@ public class SimpleDCCPacket {
     //TODO integrate with PiDCC
     //MESSAGE_SIZE includes sync bytes
     public final static int SYNC_BYTES = 4;
-    public final static int MESSAGE_SIZE = (9 + 4);
+    //9 is the size of the old message, 4 sync bytes, 1 CRC bytes
+    public final static int MESSAGE_SIZE = (9 + 4 + 1);
     //this is the AVR's max data bytes + address, which we treat as a bit of data
     public final static int MAX_DATA_BYTES = 6;
     public final static int COMMAND_PROG_DIRECT_BYTE = 0,
@@ -38,11 +39,22 @@ public class SimpleDCCPacket {
     }
 
     private static void addFooter(ByteBuffer bb) {
-        //fill in the rest of the message with zeroes
-        while (bb.remaining() > 0) {
+        //fill in the rest of the message with zeroes (except CRC byte at the end)
+        while (bb.remaining()-1 > 0) {
             //System.out.println("pad");
             bb.put((byte) 0x00);
         }
+        //now generate the CRC byte
+        byte[] messageArray = bb.array();
+        
+        CRC16 crc = new CRC16();
+        
+        //only generating from the message, ignoring sync bytes and the still-empty CRC byte
+        for(int i=SYNC_BYTES;i<messageArray.length-1;i++){
+            crc.update(messageArray[i]);
+        }
+        //now finally add the CRC byte
+        bb.put(crc.getCrc());
 
         bb.flip();
     }
@@ -102,7 +114,7 @@ public class SimpleDCCPacket {
         bb.put((byte) (COMMAND_REQUEST_BUFFER_SIZE & 0xff));
         
         addFooter(bb);
-
+        System.out.println("crc = "+bb.array()[MESSAGE_SIZE-1]);
         return bb;
     }
     
