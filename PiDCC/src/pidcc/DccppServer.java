@@ -32,6 +32,7 @@ public class DccppServer extends SocketCommsServer {
     private ArrayBlockingQueue<ByteBuffer> uartQueue;
     private final static int UART_QUEUE_LENGTH = 10;
     private ArrayList<Turnout> turnoutList;
+    private int current = 0;
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
         super(socket, serialComms);
@@ -43,6 +44,10 @@ public class DccppServer extends SocketCommsServer {
 //        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
 //            this.cabList[i] = new Cab();
 //        }
+    }
+
+    public void updateCurrentDraw(int current) {
+        this.current = current;
     }
 
     /**
@@ -541,26 +546,27 @@ public class DccppServer extends SocketCommsServer {
              * *** READ MAIN OPERATIONS TRACK CURRENT ***
              */
             case 'c':     // <c>
-/*
- *    reads current being drawn on main operations track
- *    
- *    returns: <a CURRENT> 
- *    where CURRENT = 0-1024, based on exponentially-smoothed weighting scheme
+                /*
+                 *    reads current being drawn on main operations track
+                 *    
+                 *    returns: <a CURRENT> 
+                 *    where CURRENT = 0-1024, based on exponentially-smoothed weighting scheme
                  */
-//      INTERFACE.print("<a");
-//      INTERFACE.print(int(mMonitor->current));
-//      INTERFACE.print(">");
+                //request a current read from the AVR and handle the return string in the AVR message processing section
+//                transmitMessageNow(SimpleDCCPacket.requestCurrentDraw());
+                System.out.println("requesting current draw");
+                returnString("<a " + current + ">");
                 break;
 
             /**
              * *** READ STATUS OF DCC++ BASE STATION ***
              */
             case 's':      // <s>
-/*
- *    returns status messages containing track power status, throttle status, turn-out status, and a version number
- *    NOTE: this is very useful as a first command for an interface to send to this sketch in order to verify connectivity and update any GUI to reflect actual throttle and turn-out settings
- *    
- *    returns: series of status messages that can be read by an interface to determine status of DCC++ Base Station and important settings
+                /*
+             *    returns status messages containing track power status, throttle status, turn-out status, and a version number
+             *    NOTE: this is very useful as a first command for an interface to send to this sketch in order to verify connectivity and update any GUI to reflect actual throttle and turn-out settings
+             *    
+             *    returns: series of status messages that can be read by an interface to determine status of DCC++ Base Station and important settings
                  */
                 if (this.mainTrackEnabled || true) {
                     this.returnString("<p0>");
@@ -569,11 +575,11 @@ public class DccppServer extends SocketCommsServer {
                     this.returnString("<p1>");
                 }
 
-//      if(digitalRead(SIGNAL_ENABLE_PIN_PROG)==LOW)      // could check either PROG or MAIN
-//        INTERFACE.print("<p0>");
-//      else
-//        INTERFACE.print("<p1>");
-//
+                //      if(digitalRead(SIGNAL_ENABLE_PIN_PROG)==LOW)      // could check either PROG or MAIN
+                //        INTERFACE.print("<p0>");
+                //      else
+                //        INTERFACE.print("<p1>");
+                //
                 for (int i = 1; i < cabList.size(); i++) {
                     if (this.cabList.get(i).speed == 0) {
                         continue;
@@ -595,32 +601,32 @@ public class DccppServer extends SocketCommsServer {
 
                 //TODO actual version info
                 this.returnString("<iDCC++ compatible server for SimpleDCC>");
-                this.returnString("<N 1 " + this.socket.getInetAddress().toString().replace("/", "") + ">");
-//      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
-//      INTERFACE.print(ARDUINO_TYPE);
-//      INTERFACE.print(" / ");
-//      INTERFACE.print(MOTOR_SHIELD_NAME);
-//      INTERFACE.print(": V-");
-//      INTERFACE.print(VERSION);
-//      INTERFACE.print(" / ");
-//      INTERFACE.print(__DATE__);
-//      INTERFACE.print(" ");
-//      INTERFACE.print(__TIME__);
-//      INTERFACE.print(">");
-//
-//      INTERFACE.print("<N");
-//      INTERFACE.print(COMM_TYPE);
-//      INTERFACE.print(": ");
-//
-//      #if COMM_TYPE == 0
-//        INTERFACE.print("SERIAL>");
-//      #elif COMM_TYPE == 1
-//        INTERFACE.print(Ethernet.localIP());
-//        INTERFACE.print(">");
-//      #endif
-//      
-//      Turnout::show();
-//      Output::show();
+                this.returnString("<N 1: " + this.socket.getInetAddress().toString().replace("/", "") + ">");
+                //      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
+                //      INTERFACE.print(ARDUINO_TYPE);
+                //      INTERFACE.print(" / ");
+                //      INTERFACE.print(MOTOR_SHIELD_NAME);
+                //      INTERFACE.print(": V-");
+                //      INTERFACE.print(VERSION);
+                //      INTERFACE.print(" / ");
+                //      INTERFACE.print(__DATE__);
+                //      INTERFACE.print(" ");
+                //      INTERFACE.print(__TIME__);
+                //      INTERFACE.print(">");
+                //
+                //      INTERFACE.print("<N");
+                //      INTERFACE.print(COMM_TYPE);
+                //      INTERFACE.print(": ");
+                //
+                //      #if COMM_TYPE == 0
+                //        INTERFACE.print("SERIAL>");
+                //      #elif COMM_TYPE == 1
+                //        INTERFACE.print(Ethernet.localIP());
+                //        INTERFACE.print(">");
+                //      #endif
+                //      
+                //      Turnout::show();
+                //      Output::show();
                 //TODO support outputs and points
                 this.returnString("<X>");
                 this.returnString("<X>");
@@ -631,46 +637,37 @@ public class DccppServer extends SocketCommsServer {
              * *** STORE SETTINGS IN EEPROM ***
              */
             case 'E':     // <E>
-/*
- *    stores settings for turnouts and sensors EEPROM
- *    
- *    returns: <e nTurnouts nSensors>
+                /*
+                 *    stores settings for turnouts and sensors EEPROM
+                 *    
+                 *    returns: <e nTurnouts nSensors>
                  */
-
-//    EEStore::store();
-//    INTERFACE.print("<e ");
-//    INTERFACE.print(EEStore::eeStore->data.nTurnouts);
-//    INTERFACE.print(" ");
-//    INTERFACE.print(EEStore::eeStore->data.nSensors);
-//    INTERFACE.print(" ");
-//    INTERFACE.print(EEStore::eeStore->data.nOutputs);
-//    INTERFACE.print(">");
+                //TODO serialise Turnouts to JSON (see google gson)
                 break;
 
             /**
              * *** CLEAR SETTINGS IN EEPROM ***
              */
             case 'e':     // <e>
-/*
- *    clears settings for Turnouts in EEPROM
- *    
- *    returns: <O>
+                /*
+                 *    clears settings for Turnouts in EEPROM
+                 *    
+                 *    returns: <O>
                  */
 
-//    EEStore::clear();
-//    INTERFACE.print("<O>");
                 break;
 
             /**
              * *** PRINT CARRIAGE RETURN IN SERIAL MONITOR WINDOW ***
              */
             case ' ':     // < >                
-/*
- *    simply prints a carriage return - useful when interacting with Ardiuno through serial monitor window
- *    
- *    returns: a carriage return
+                /*
+                 *    simply prints a carriage return - useful when interacting with Ardiuno through serial monitor window
+                 *    
+                 *    returns: a carriage return
                  */
-//      INTERFACE.println("");
+                //might as well support this
+                returnString("\r\n");
                 break;
 
 ///          
@@ -681,34 +678,10 @@ public class DccppServer extends SocketCommsServer {
              * *** ENTER DIAGNOSTIC MODE ***
              */
             case 'D':       // <D>  
-/*
- *    changes the clock speed of the chip and the pre-scaler for the timers so that you can visually see the DCC signals flickering with an LED
- *    SERIAL COMMUNICAITON WILL BE INTERUPTED ONCE THIS COMMAND IS ISSUED - MUST RESET BOARD OR RE-OPEN SERIAL WINDOW TO RE-ESTABLISH COMMS
+                /*
+                 *    changes the clock speed of the chip and the pre-scaler for the timers so that you can visually see the DCC signals flickering with an LED
+                 *    SERIAL COMMUNICAITON WILL BE INTERUPTED ONCE THIS COMMAND IS ISSUED - MUST RESET BOARD OR RE-OPEN SERIAL WINDOW TO RE-ESTABLISH COMMS
                  */
-
-//    Serial.println("\nEntering Diagnostic Mode...");
-//    delay(1000);
-//    
-//    bitClear(TCCR1B,CS12);    // set Timer 1 prescale=8 - SLOWS NORMAL SPEED BY FACTOR OF 8
-//    bitSet(TCCR1B,CS11);
-//    bitClear(TCCR1B,CS10);
-//
-//    #if defined(ARDUINO_AVR_UNO) || defined(AVR_ATMEGA644)       // Configuration for UNO
-//
-//      bitSet(TCCR0B,CS02);    // set Timer 0 prescale=256 - SLOWS NORMAL SPEED BY A FACTOR OF 4
-//      bitClear(TCCR0B,CS01);
-//      bitClear(TCCR0B,CS00);
-//      
-//    #else                     // Configuration for MEGA
-//
-//      bitClear(TCCR3B,CS32);    // set Timer 3 prescale=8 - SLOWS NORMAL SPEED BY A FACTOR OF 8
-//      bitSet(TCCR3B,CS31);
-//      bitClear(TCCR3B,CS30);
-//
-//    #endif
-//
-//    CLKPR=0x80;           // THIS SLOWS DOWN SYSYEM CLOCK BY FACTOR OF 256
-//    CLKPR=0x08;           // BOARD MUST BE RESET TO RESUME NORMAL OPERATIONS
                 break;
 
             /**
@@ -770,6 +743,8 @@ public class DccppServer extends SocketCommsServer {
 //      INTERFACE.print("<f");
 //      INTERFACE.print((int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval));
 //      INTERFACE.print(">");
+                //claim there's two gigs and see what happens
+                returnString("<F 2147483648>");
                 break;
 
             /**
@@ -815,6 +790,11 @@ public class DccppServer extends SocketCommsServer {
             case SimpleDCCPacket.RESPONSE_PACKET_BUFFER_SIZE:
                 int packetsInBuffer = 0xff & message[1];
                 Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}", packetsInBuffer);
+                int currentDraw = (0xff & message[2]) | (message[3]<<8);
+                //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
+                //currentDraw = currentDraw << 2;
+                System.out.println("Received current draw of " + currentDraw);
+                updateCurrentDraw(currentDraw);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
                 }
@@ -823,6 +803,12 @@ public class DccppServer extends SocketCommsServer {
                 int errorType = 0xff & message[1];
                 Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Comms error from AVR type: {0}", errorType);
                 break;
+//            case SimpleDCCPacket.RESPONSE_CURRENT:
+//                int currentDraw = 0xff & message[1];
+//                //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
+//                currentDraw = currentDraw << 2;
+//                returnString("<a "+currentDraw+">");
+//                System.out.println("Received current draw of "+currentDraw);
         }
     }
 

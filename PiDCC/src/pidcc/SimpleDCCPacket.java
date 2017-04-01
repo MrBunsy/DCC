@@ -17,10 +17,12 @@ public class SimpleDCCPacket {
     public final static int COMMAND_PROG_DIRECT_BYTE = 0,
             COMMAND_OPERATIONS_MODE = 1,
             COMMAND_PROG_ADDRESS = 2,
-            COMMAND_REQUEST_BUFFER_SIZE = 7;
+            COMMAND_REQUEST_BUFFER_SIZE = 7,
+            COMMAND_REQUEST_CURRENT = 8;
     
-    public final static int RESPONSE_PACKET_BUFFER_SIZE = 8,
-            RESPONSE_COMMS_ERROR = 9;
+    public final static int RESPONSE_PACKET_BUFFER_SIZE = 9,
+            RESPONSE_COMMS_ERROR = 10,
+            RESPONSE_CURRENT = 11;
 
     public final static int[] syncBytes = {0xff, 0xcc, 0xcc, 0xff};
 
@@ -98,6 +100,16 @@ public class SimpleDCCPacket {
         ByteBuffer bb = createHeader();
         
         bb.put((byte) (COMMAND_REQUEST_BUFFER_SIZE & 0xff));
+        
+        addFooter(bb);
+
+        return bb;
+    }
+    
+    public static ByteBuffer requestCurrentDraw(){
+        ByteBuffer bb = createHeader();
+        
+        bb.put((byte) (COMMAND_REQUEST_CURRENT & 0xff));
         
         addFooter(bb);
 
