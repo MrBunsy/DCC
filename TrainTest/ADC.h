@@ -16,5 +16,6 @@ void adc_init();
 uint8_t adc_read();
 void printADCValue();
 
+volatile uint16_t currentDrawValue;
 
 #endif /* ADC_H_ */
