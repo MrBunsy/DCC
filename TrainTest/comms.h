@@ -28,12 +28,18 @@ typedef enum {
 	COMMAND_ENTER_SERVICE_MODE,
 	COMMAND_REQUEST_BUFFER_SIZE,
 	COMMAND_REQUEST_CURRENT,
+	COMMAND_SET_POWER,
 	
-	RESPONSE_PACKET_BUFFER_SIZE, //inform the listener how many packets are currently in the buffer
+	RESPONSE_PACKET_BUFFER_SIZE = 100, //inform the listener how many packets are currently in the buffer
 	RESPONSE_COMMS_ERROR,
 	//current current draw measured from ADC
 	REPONSE_CURRENT,
 } commandType_t;
+
+typedef enum{
+	MAIN_TRACK = 0,
+	PROG_TRACK
+}trackType_t;
 
 //used for finding the start of a packet:
 #define SYNC_INT (0xffccccff)
@@ -85,6 +91,11 @@ typedef struct{
 }packetBufferSizeData_t;
 
 typedef struct{
+	uint8_t whichTrack;
+	bool powered;
+}trackPoweredData_t;
+
+typedef struct{
 	uint8_t currentDraw;
 }currentDrawData_t;
 
@@ -97,6 +108,7 @@ typedef union {
 	programmeDirectByteMessageData_t programmeDirectByteMessageData;
 	packetBufferSizeData_t packetBufferSizeData;
 	currentDrawData_t currentDrawData;
+	trackPoweredData_t trackPoweredData;
 } messageDataUnion_t;
 
 //#pragma pack(1)

@@ -156,7 +156,7 @@ void simpleDCC_init() {
 
 	//start DCC output
 	Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-	Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+	Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	
 	Clrb(DCC_PORT, DCC_PROG_TRACK_OUT);
 	Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
@@ -190,6 +190,23 @@ void simpleDCC_init() {
 	//setCVwithDirectMode(1,6);
 }
 
+/************************************************************************/
+/* turn power on or off for main track and prog track                   */
+/************************************************************************/
+void setProgTrackPower(bool power){
+	if(power){
+		Setb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+		}else{
+		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+	}
+}
+void setMainTrackPower(bool power){
+	if(power){
+		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+		}else{
+		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+	}
+}
 
 bool enterServiceMode(){
 	uint8_t i;
