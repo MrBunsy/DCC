@@ -131,6 +131,9 @@ void setServiceLED();
 void setDataLED();
 void setIdleLED();
 
+void setProgTrackPower(bool power);
+void setMainTrackPower(bool power);
+
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
 //service mode is going to need overhauling with dccpp I think
 

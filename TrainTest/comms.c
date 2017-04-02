@@ -16,55 +16,55 @@
 uint8_t readByteBlocking(){
 	uint16_t c;
 	for(;;)
-    {
-        /*
-         * Get received character from ringbuffer
-         * uart_getc() returns in the lower byte the received character and 
-         * in the higher byte (bitmask) the last receive error
-         * UART_NO_DATA is returned when no data is available.
-         *
-         */
-        c = uart_getc();
-        if ( c & UART_NO_DATA )
-        {
-            /* 
-             * no data available from UART 
-             */
-        }
-        else
-        {
-            /*
-             * new data available from UART
-             * check for Frame or Overrun error
-             */
-            if ( c & UART_FRAME_ERROR )
-            {
-                /* Framing Error detected, i.e no stop bit detected */
-                //uart_puts_P("UART Frame Error: ");
-            }
-            if ( c & UART_OVERRUN_ERROR )
-            {
-                /* 
-                 * Overrun, a character already present in the UART UDR register was 
-                 * not read by the interrupt handler before the next character arrived,
-                 * one or more received characters have been dropped
-                 */
-                //uart_puts_P("UART Overrun Error: ");
-            }
-            if ( c & UART_BUFFER_OVERFLOW )
-            {
-                /* 
-                 * We are not reading the receive buffer fast enough,
-                 * one or more received character have been dropped 
-                 */
-                //uart_puts_P("Buffer overflow error: ");
-            }
-            /* 
-             * send received character back
-             */
+	{
+		/*
+		* Get received character from ringbuffer
+		* uart_getc() returns in the lower byte the received character and
+		* in the higher byte (bitmask) the last receive error
+		* UART_NO_DATA is returned when no data is available.
+		*
+		*/
+		c = uart_getc();
+		if ( c & UART_NO_DATA )
+		{
+			/*
+			* no data available from UART
+			*/
+		}
+		else
+		{
+			/*
+			* new data available from UART
+			* check for Frame or Overrun error
+			*/
+			if ( c & UART_FRAME_ERROR )
+			{
+				/* Framing Error detected, i.e no stop bit detected */
+				//uart_puts_P("UART Frame Error: ");
+			}
+			if ( c & UART_OVERRUN_ERROR )
+			{
+				/*
+				* Overrun, a character already present in the UART UDR register was
+				* not read by the interrupt handler before the next character arrived,
+				* one or more received characters have been dropped
+				*/
+				//uart_puts_P("UART Overrun Error: ");
+			}
+			if ( c & UART_BUFFER_OVERFLOW )
+			{
+				/*
+				* We are not reading the receive buffer fast enough,
+				* one or more received character have been dropped
+				*/
+				//uart_puts_P("Buffer overflow error: ");
+			}
+			/*
+			* send received character back
+			*/
 			return (uint8_t)c;
-        }
-    }
+		}
+	}
 }
 
 
@@ -286,7 +286,16 @@ void processMessage(message_t* message){
 		//nothing to actually do, this is done in response to every single message atm
 		break;
 		case COMMAND_REQUEST_CURRENT:
-//		transmitCurrentDraw(adc_read());
+		//		transmitCurrentDraw(adc_read());
+		break;
+		case COMMAND_SET_POWER:
+		if(message->data.trackPoweredData.whichTrack==MAIN_TRACK){
+			setMainTrackPower(message->data.trackPoweredData.powered);
+		}else
+		if(message->data.trackPoweredData.whichTrack==PROG_TRACK){
+			setProgTrackPower(message->data.trackPoweredData.powered);
+		}
+		
 		break;
 		default:
 		transmitCommsDebug(2);
@@ -304,47 +313,47 @@ void bufferInput(void){
 	uint16_t c;
 	
 	c = uart_getc();
-        if ( c & UART_NO_DATA )
-        {
-            /* 
-             * no data available from UART 
-             */
-        }
-        else
-        {
-            /*
-             * new data available from UART
-             * check for Frame or Overrun error
-             */
-            if ( c & UART_FRAME_ERROR )
-            {
-                /* Framing Error detected, i.e no stop bit detected */
-                //uart_puts_P("UART Frame Error: ");
-            }
-            if ( c & UART_OVERRUN_ERROR )
-            {
-                /* 
-                 * Overrun, a character already present in the UART UDR register was 
-                 * not read by the interrupt handler before the next character arrived,
-                 * one or more received characters have been dropped
-                 */
-                //uart_puts_P("UART Overrun Error: ");
-            }
-            if ( c & UART_BUFFER_OVERFLOW )
-            {
-                /* 
-                 * We are not reading the receive buffer fast enough,
-                 * one or more received character have been dropped 
-                 */
-                //uart_puts_P("Buffer overflow error: ");
-            }
-            /* 
-             * c is available!
-             */
-			//return (uint8_t)c;
-			inputBuffer[inputBufferEndPosition] = (uint8_t)c;
-			inputBufferEndPosition++;
-        }
+	if ( c & UART_NO_DATA )
+	{
+		/*
+		* no data available from UART
+		*/
+	}
+	else
+	{
+		/*
+		* new data available from UART
+		* check for Frame or Overrun error
+		*/
+		if ( c & UART_FRAME_ERROR )
+		{
+			/* Framing Error detected, i.e no stop bit detected */
+			//uart_puts_P("UART Frame Error: ");
+		}
+		if ( c & UART_OVERRUN_ERROR )
+		{
+			/*
+			* Overrun, a character already present in the UART UDR register was
+			* not read by the interrupt handler before the next character arrived,
+			* one or more received characters have been dropped
+			*/
+			//uart_puts_P("UART Overrun Error: ");
+		}
+		if ( c & UART_BUFFER_OVERFLOW )
+		{
+			/*
+			* We are not reading the receive buffer fast enough,
+			* one or more received character have been dropped
+			*/
+			//uart_puts_P("Buffer overflow error: ");
+		}
+		/*
+		* c is available!
+		*/
+		//return (uint8_t)c;
+		inputBuffer[inputBufferEndPosition] = (uint8_t)c;
+		inputBufferEndPosition++;
+	}
 }
 
 void processInput(void){
@@ -354,7 +363,7 @@ void processInput(void){
 	if(inputBufferEndPosition - inputBufferStartPosition > FULL_MESSAGE_LENGTH){
 		if(!areSyncBytes(&inputBuffer[inputBufferStartPosition])){
 			inputBufferStartPosition++;
-		}else{
+			}else{
 			transmitCommsDebug(3);
 			//we have a whole message in the buffer, with valid sync bytes at the start
 			processMessage((message_t*)&inputBuffer[inputBufferStartPosition]);
