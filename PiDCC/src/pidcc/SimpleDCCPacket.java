@@ -19,11 +19,14 @@ public class SimpleDCCPacket {
             COMMAND_OPERATIONS_MODE = 1,
             COMMAND_PROG_ADDRESS = 2,
             COMMAND_REQUEST_BUFFER_SIZE = 7,
-            COMMAND_REQUEST_CURRENT = 8;
+            COMMAND_REQUEST_CURRENT = 8,
+            COMMAND_SET_POWER = 9;
     
-    public final static int RESPONSE_PACKET_BUFFER_SIZE = 9,
-            RESPONSE_COMMS_ERROR = 10,
-            RESPONSE_CURRENT = 11;
+    public final static int RESPONSE_PACKET_BUFFER_SIZE = 100,
+            RESPONSE_COMMS_ERROR = 101,
+            RESPONSE_CURRENT = 102;
+    
+    public final static int MAIN_TRACK = 0, PROG_TRACK = 1;
 
     public final static int[] syncBytes = {0xff, 0xcc, 0xcc, 0xff};
 
@@ -112,6 +115,24 @@ public class SimpleDCCPacket {
         ByteBuffer bb = createHeader();
         
         bb.put((byte) (COMMAND_REQUEST_BUFFER_SIZE & 0xff));
+        
+        addFooter(bb);
+        //System.out.println("crc = "+bb.array()[MESSAGE_SIZE-1]);
+        return bb;
+    }
+    
+    /**
+     * Turn programming or main track on or off
+     * @param trackType MAIN_TRACK or PROG_TRACK //TODO real enum?
+     * @param powered true for powered, false for unpowered
+     * @return 
+     */
+    public static ByteBuffer setTrackPower(int trackType, boolean powered){
+        ByteBuffer bb = createHeader();
+        
+        bb.put((byte) (COMMAND_SET_POWER & 0xff));
+        bb.put((byte) trackType);
+        bb.put((byte) (powered ? 1 : 0));
         
         addFooter(bb);
         //System.out.println("crc = "+bb.array()[MESSAGE_SIZE-1]);

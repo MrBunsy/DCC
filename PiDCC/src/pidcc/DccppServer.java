@@ -206,6 +206,13 @@ public class DccppServer extends SocketCommsServer {
             Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+    
+    public void setBothTrackPower(boolean power){
+        this.mainTrackEnabled = power;
+        this.progTrackEnabled = power;
+        transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.MAIN_TRACK, power));
+        transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.PROG_TRACK, power));
+    }
 
     private void processDccppCommand(String command) {
         command = tidyCommand(command);
@@ -540,28 +547,26 @@ public class DccppServer extends SocketCommsServer {
              * *** TURN ON POWER FROM MOTOR SHIELD TO TRACKS ***
              */
             case '1':      // <1>
-/*   
- *    enables power from the motor shield to the main operations and programming tracks
- *    
- *    returns: <p1>
+                /*   
+                 *    enables power from the motor shield to the main operations and programming tracks
+                 *    
+                 *    returns: <p1>
                  */
-//     digitalWrite(SIGNAL_ENABLE_PIN_PROG,HIGH);
-//     digitalWrite(SIGNAL_ENABLE_PIN_MAIN,HIGH);
-//     INTERFACE.print("<p1>");
+                setBothTrackPower(true);
+                returnString("<p1>");
                 break;
 
             /**
              * *** TURN OFF POWER FROM MOTOR SHIELD TO TRACKS ***
              */
             case '0':     // <0>
-/*   
- *    disables power from the motor shield to the main operations and programming tracks
- *    
- *    returns: <p0>
+                /*   
+                 *    disables power from the motor shield to the main operations and programming tracks
+                 *    
+                 *    returns: <p0>
                  */
-//     digitalWrite(SIGNAL_ENABLE_PIN_PROG,LOW);
-//     digitalWrite(SIGNAL_ENABLE_PIN_MAIN,LOW);
-//     INTERFACE.print("<p0>");
+                setBothTrackPower(false);
+                returnString("<p0>");
                 break;
 
             /**
@@ -594,18 +599,12 @@ public class DccppServer extends SocketCommsServer {
              *    
              *    returns: series of status messages that can be read by an interface to determine status of DCC++ Base Station and important settings
                  */
-                if (this.mainTrackEnabled || true) {
-                    this.returnString("<p0>");
-                } else if (this.progTrackEnabled) {
-                    //TODO this logic doesn't match up to the original, which seemed to be program OR main
+                //Dccpp only supports turning them both on or off, it seems
+                if (this.mainTrackEnabled) {
                     this.returnString("<p1>");
+                } else {
+                    this.returnString("<p0>");
                 }
-
-                //      if(digitalRead(SIGNAL_ENABLE_PIN_PROG)==LOW)      // could check either PROG or MAIN
-                //        INTERFACE.print("<p0>");
-                //      else
-                //        INTERFACE.print("<p1>");
-                //
                 for (int i = 1; i < cabList.size(); i++) {
                     if (this.cabList.get(i).speed == 0) {
                         continue;
@@ -626,7 +625,22 @@ public class DccppServer extends SocketCommsServer {
                 }
 
                 //TODO actual version info
-                this.returnString("<i DCC++ compatible server for SimpleDCC>");
+                //not workiung for reasons unknown, looks okay to me in the source but clearly not
+                //this.returnString("<i DCC++ compatible server for SimpleDCC>");
+                
+                   this.returnString("<iDCC++ BASE STATION FOR ARDUINO ");
+                    this.returnString("ATMEGA644");
+                    this.returnString(" / ");
+                    this.returnString("ARDUINO");
+                    this.returnString(": V-");
+                    this.returnString("1234");
+                    this.returnString(" / ");
+                    this.returnString("2017");
+                    this.returnString(" ");
+                    this.returnString("00:00");
+                    this.returnString(">");
+                
+                
                 this.returnString("<N 1: " + this.socket.getInetAddress().toString().replace("/", "") + ">");
                 //      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
                 //      INTERFACE.print(ARDUINO_TYPE);
