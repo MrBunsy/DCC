@@ -289,13 +289,25 @@ void processMessage(message_t* message){
 		//		transmitCurrentDraw(adc_read());
 		break;
 		case COMMAND_SET_POWER:
+		//turns the power on or off for either the main track or programming track
 		if(message->data.trackPoweredData.whichTrack==MAIN_TRACK){
 			setMainTrackPower(message->data.trackPoweredData.powered);
 		}else
 		if(message->data.trackPoweredData.whichTrack==PROG_TRACK){
 			setProgTrackPower(message->data.trackPoweredData.powered);
 		}
+		break;
+		case COMMAND_SHIFT_REGISTER_DATA:
+		//this is data that will be sent out over SPI for the LED drivers/point motors
+		//once all the data has been collected it will be shifted out and a latch pin raised
+			setShiftRegisterData(message->data.shiftRegisterData.startByte,message->data.shiftRegisterData.data);
 		
+		break;
+		case COMMAND_SET_SHIFT_REGISTER_LENGTH:
+			resetShiftRegister(message->data.shiftRegisterLengthData.length);
+		break;
+		case COMMAND_OUTPUT_SHIFT_REGISTER:
+			outputShiftRegister();
 		break;
 		default:
 		transmitCommsDebug(2);
