@@ -14,6 +14,7 @@
 #include "SimpleDCC.h"
 #include <string.h>
 #include "ADC.h"
+#include "shiftregister.h"
 
 //message data is only part of the message, this is not the size of the full message (which is data + type + sync bytes)
 #define MAX_MESSAGE_DATA_BYTES (MAX_DATA_BYTES_IN_DCC_PACKET + 3)
@@ -29,6 +30,9 @@ typedef enum {
 	COMMAND_REQUEST_BUFFER_SIZE,
 	COMMAND_REQUEST_CURRENT,
 	COMMAND_SET_POWER,
+	COMMAND_SET_SHIFT_REGISTER_LENGTH,
+	COMMAND_SHIFT_REGISTER_DATA,//part (or all) of the data to be sent out over SPI, then have the enable pin raised.
+	COMMAND_OUTPUT_SHIFT_REGISTER,
 	
 	RESPONSE_PACKET_BUFFER_SIZE = 100, //inform the listener how many packets are currently in the buffer
 	RESPONSE_COMMS_ERROR,
@@ -55,6 +59,17 @@ typedef enum{
 typedef struct {
 	uint8_t data[MAX_MESSAGE_DATA_BYTES]; //may need to change number of bytes
 } genericMessageData_t;
+
+
+#define SHIFT_REG_BYTES_PER_MESSAGE (MAX_MESSAGE_DATA_BYTES - 2)
+typedef struct{
+	uint16_t startByte;
+	uint8_t data[SHIFT_REG_BYTES_PER_MESSAGE];
+}shiftregisterMessageData_t;
+
+typedef struct{
+	uint16_t length;
+}shiftRegisterLengthMessageData_t;
 
 typedef struct {
 	uint8_t address;
@@ -109,6 +124,8 @@ typedef union {
 	packetBufferSizeData_t packetBufferSizeData;
 	currentDrawData_t currentDrawData;
 	trackPoweredData_t trackPoweredData;
+	shiftregisterMessageData_t shiftRegisterData;
+	shiftRegisterLengthMessageData_t shiftRegisterLengthData;
 } messageDataUnion_t;
 
 //#pragma pack(1)

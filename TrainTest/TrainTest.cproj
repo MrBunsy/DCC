@@ -155,10 +155,22 @@
     <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="shiftregister.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="shiftregister.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="SimpleDCC.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="SimpleDCC.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="spi.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="spi.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="uart.c">
