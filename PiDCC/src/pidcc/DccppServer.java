@@ -49,7 +49,22 @@ public class DccppServer extends SocketCommsServer {
     public void updateCurrentDraw(int current) {
         this.current = current;
     }
-
+    
+    public void stopEverything(){
+        uartWrite.stop();
+        uartRead.stop();
+        //this is probably the one to have called stopeverything, but just for completeness!
+        tcpRead.stop();
+        stop();
+        //pop a posion pill on the queue so that uartWrite isn't stuck waiting for an empty queue for ever
+        //stand in poision pill that the AVR won't care about for now!
+        //IDEA - last message is also a shutdown power for the track!
+        transmitMessageNow(SimpleDCCPacket.requestAVRPacketBufferSize());
+    }
+    
+    private TCPReadThread tcpRead;
+    private UARTWriteThread uartWrite;
+    private UARTReadThread uartRead;
     /**
      * run until finished, then return
      */
@@ -58,15 +73,15 @@ public class DccppServer extends SocketCommsServer {
 
         //fire up a load of threads
         //read the TCP stream IN (this will call processDccppCommand)
-        TCPReadThread tcpRead = new TCPReadThread();
+        tcpRead = new TCPReadThread();
         (new Thread(tcpRead)).start();
 
         //write UART queue OUT (this will write everthing in uartQueue)
-        UARTWriteThread uartWrite = new UARTWriteThread();
+        uartWrite = new UARTWriteThread();
         (new Thread(uartWrite)).start();
 
         //read UART IN (this will call processUARTCommand)
-        UARTReadThread uartRead = new UARTReadThread();
+        uartRead = new UARTReadThread();
         (new Thread(uartRead)).start();
 
         running = true;
@@ -190,6 +205,13 @@ public class DccppServer extends SocketCommsServer {
         } catch (InterruptedException ex) {
             Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
         }
+    }
+    
+    public void setBothTrackPower(boolean power){
+        this.mainTrackEnabled = power;
+        this.progTrackEnabled = power;
+        transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.MAIN_TRACK, power));
+        transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.PROG_TRACK, power));
     }
 
     private void processDccppCommand(String command) {
@@ -338,45 +360,50 @@ public class DccppServer extends SocketCommsServer {
              * *** OPERATE STATIONARY ACCESSORY DECODERS ***
              */
             case 'a':       // <a ADDRESS SUBADDRESS ACTIVATE>
-/*
- *    turns an accessory (stationary) decoder on or off
- *    
- *    ADDRESS:  the primary address of the decoder (0-511)
- *    SUBADDRESS: the subaddress of the decoder (0-3)
- *    ACTIVATE: 1=on (set), 0=off (clear)
- *    
- *    Note that many decoders and controllers combine the ADDRESS and SUBADDRESS into a single number, N,
- *    from  1 through a max of 2044, where
- *    
- *    N = (ADDRESS - 1) * 4 + SUBADDRESS + 1, for all ADDRESS>0
- *    
- *    OR
- *    
- *    ADDRESS = INT((N - 1) / 4) + 1
- *    SUBADDRESS = (N - 1) % 4
- *    
- *    returns: NONE
+                /*
+                 *    turns an accessory (stationary) decoder on or off
+                 *    
+                 *    ADDRESS:  the primary address of the decoder (0-511)
+                 *    SUBADDRESS: the subaddress of the decoder (0-3)
+                 *    ACTIVATE: 1=on (set), 0=off (clear)
+                 *    
+                 *    Note that many decoders and controllers combine the ADDRESS and SUBADDRESS into a single number, N,
+                 *    from  1 through a max of 2044, where
+                 *    
+                 *    N = (ADDRESS - 1) * 4 + SUBADDRESS + 1, for all ADDRESS>0
+                 *    
+                 *    OR
+                 *    
+                 *    ADDRESS = INT((N - 1) / 4) + 1
+                 *    SUBADDRESS = (N - 1) % 4
+                 *    
+                 *    returns: NONE
                  */
-//      mRegs->setAccessory(com+1);
-                //not supporting accessory decoders atm, nothing to do here
+                cabAddress = Integer.parseInt(splitCommand[1]);
+                int subaddress = Integer.parseInt(splitCommand[2]);
+                int activate = Integer.parseInt(splitCommand[3]);
+                //throwing in support for this, but no way of testing atm
+                //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
+                byte[] nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
+                transmitMessageNow(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
                 break;
 
             /**
              * *** CREATE/EDIT/REMOVE/SHOW & OPERATE A TURN-OUT ***
              */
             case 'T':       // <T ID THROW>
-/*
- *   <T ID THROW>:                sets turnout ID to either the "thrown" or "unthrown" position
- *   
- *   ID: the numeric ID (0-32767) of the turnout to control
- *   THROW: 0 (unthrown) or 1 (thrown)
- *   
- *   returns: <H ID THROW> or <X> if turnout ID does not exist
- *   
- *   *** SEE ACCESSORIES.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "T" COMMAND
- *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
+                /*
+                 *   <T ID THROW>:                sets turnout ID to either the "thrown" or "unthrown" position
+                 *   
+                 *   ID: the numeric ID (0-32767) of the turnout to control
+                 *   THROW: 0 (unthrown) or 1 (thrown)
+                 *   
+                 *   returns: <H ID THROW> or <X> if turnout ID does not exist
+                 *   
+                 *   *** SEE ACCESSORIES.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "T" COMMAND
+                 *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
                  */
-//      Turnout::parse(com+1);
+
                 //TODO - combine with my plans for controlling points!
                 break;
 
@@ -384,18 +411,17 @@ public class DccppServer extends SocketCommsServer {
              * *** CREATE/EDIT/REMOVE/SHOW & OPERATE AN OUTPUT PIN ***
              */
             case 'Z':       // <Z ID ACTIVATE>
-/*
- *   <Z ID ACTIVATE>:          sets output ID to either the "active" or "inactive" state
- *   
- *   ID: the numeric ID (0-32767) of the output to control
- *   ACTIVATE: 0 (active) or 1 (inactive)
- *   
- *   returns: <Y ID ACTIVATE> or <X> if output ID does not exist
- *   
- *   *** SEE OUTPUTS.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "O" COMMAND
- *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
+                /*
+                 *   <Z ID ACTIVATE>:          sets output ID to either the "active" or "inactive" state
+                 *   
+                 *   ID: the numeric ID (0-32767) of the output to control
+                 *   ACTIVATE: 0 (active) or 1 (inactive)
+                 *   
+                 *   returns: <Y ID ACTIVATE> or <X> if output ID does not exist
+                 *   
+                 *   *** SEE OUTPUTS.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "O" COMMAND
+                 *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
                  */
-//      Output::parse(com+1);
                 //just say it doesn't exist, no plans to support this yet
                 this.returnString("<X>");
                 break;
@@ -405,21 +431,23 @@ public class DccppServer extends SocketCommsServer {
              */
             case 'S':
                 /*   
- *   *** SEE SENSOR.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "S" COMMAND
- *   USED TO CREATE/EDIT/REMOVE/SHOW SENSOR DEFINITIONS
+                *   *** SEE SENSOR.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "S" COMMAND
+                *   USED TO CREATE/EDIT/REMOVE/SHOW SENSOR DEFINITIONS
                  */
-//      Sensor::parse(com+1);
+                
                 //major TODO, but not urgent
+                //return none for now
+                this.returnString("<X>");
                 break;
 
             /**
              * *** SHOW STATUS OF ALL SENSORS ***
              */
             case 'Q':         // <Q>
-/*
- *    returns: the status of each sensor ID in the form <Q ID> (active) or <q ID> (not active)
+                /*
+                 *    returns: the status of each sensor ID in the form <Q ID> (active) or <q ID> (not active)
                  */
-//      Sensor::status();
+                this.returnString("<X>");
                 break;
 
             /**
@@ -427,14 +455,14 @@ public class DccppServer extends SocketCommsServer {
              * OPERATIONS TRACK ***
              */
             case 'w':      // <w CAB CV VALUE>
-/*
- *    writes, without any verification, a Configuration Variable to the decoder of an engine on the main operations track
- *    
- *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
- *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
- *    VALUE: the value to be written to the Configuration Variable memory location (0-255)
- *    
- *    returns: NONE
+                /*
+                 *    writes, without any verification, a Configuration Variable to the decoder of an engine on the main operations track
+                 *    
+                 *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
+                 *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
+                 *    VALUE: the value to be written to the Configuration Variable memory location (0-255)
+                 *    
+                 *    returns: NONE
                  */
 //      mRegs->writeCVByteMain(com+1);
                 break;
@@ -444,15 +472,15 @@ public class DccppServer extends SocketCommsServer {
              * OPERATIONS TRACK ***
              */
             case 'b':      // <b CAB CV BIT VALUE>
-/*
- *    writes, without any verification, a single bit within a Configuration Variable to the decoder of an engine on the main operations track
- *    
- *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
- *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
- *    BIT: the bit number of the Configurarion Variable regsiter to write (0-7)
- *    VALUE: the value of the bit to be written (0-1)
- *    
- *    returns: NONE
+                /*
+                 *    writes, without any verification, a single bit within a Configuration Variable to the decoder of an engine on the main operations track
+                 *    
+                 *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
+                 *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
+                 *    BIT: the bit number of the Configurarion Variable regsiter to write (0-7)
+                 *    VALUE: the value of the bit to be written (0-1)
+                 *    
+                 *    returns: NONE
                  */
 //      mRegs->writeCVBitMain(com+1);
                 break;
@@ -462,18 +490,19 @@ public class DccppServer extends SocketCommsServer {
              * PROGRAMMING TRACK ***
              */
             case 'W':      // <W CV VALUE CALLBACKNUM CALLBACKSUB>
-/*
- *    writes, and then verifies, a Configuration Variable to the decoder of an engine on the programming track
- *    
- *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
- *    VALUE: the value to be written to the Configuration Variable memory location (0-255) 
- *    CALLBACKNUM: an arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs that call this function
- *    CALLBACKSUB: a second arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs (e.g. DCC++ Interface) that call this function
- *    
- *    returns: <r CALLBACKNUM|CALLBACKSUB|CV Value)
- *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if verificaiton read fails
+                /*
+                 *    writes, and then verifies, a Configuration Variable to the decoder of an engine on the programming track
+                 *    
+                 *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
+                 *    VALUE: the value to be written to the Configuration Variable memory location (0-255) 
+                 *    CALLBACKNUM: an arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs that call this function
+                 *    CALLBACKSUB: a second arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs (e.g. DCC++ Interface) that call this function
+                 *    
+                 *    returns: <r CALLBACKNUM|CALLBACKSUB|CV Value)
+                 *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if verificaiton read fails
                  */
-//      pRegs->writeCVByte(com+1);
+                //      pRegs->writeCVByte(com+1);
+                //looking in the soruce code, those are ascii | symbols, not binary or
                 break;
 
             /**
@@ -481,19 +510,19 @@ public class DccppServer extends SocketCommsServer {
              * PROGRAMMING TRACK ***
              */
             case 'B':      // <B CV BIT VALUE CALLBACKNUM CALLBACKSUB>
-/*
- *    writes, and then verifies, a single bit within a Configuration Variable to the decoder of an engine on the programming track
- *    
- *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
- *    BIT: the bit number of the Configurarion Variable memory location to write (0-7)
- *    VALUE: the value of the bit to be written (0-1)
- *    CALLBACKNUM: an arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs that call this function
- *    CALLBACKSUB: a second arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs (e.g. DCC++ Interface) that call this function
- *    
- *    returns: <r CALLBACKNUM|CALLBACKSUB|CV BIT VALUE)
- *    where VALUE is a number from 0-1 as read from the requested CV bit, or -1 if verificaiton read fails
+                /*
+                 *    writes, and then verifies, a single bit within a Configuration Variable to the decoder of an engine on the programming track
+                 *    
+                 *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
+                 *    BIT: the bit number of the Configurarion Variable memory location to write (0-7)
+                 *    VALUE: the value of the bit to be written (0-1)
+                 *    CALLBACKNUM: an arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs that call this function
+                 *    CALLBACKSUB: a second arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs (e.g. DCC++ Interface) that call this function
+                 *    
+                 *    returns: <r CALLBACKNUM|CALLBACKSUB|CV BIT VALUE)
+                 *    where VALUE is a number from 0-1 as read from the requested CV bit, or -1 if verificaiton read fails
                  */
-//      pRegs->writeCVBit(com+1);
+                //      pRegs->writeCVBit(com+1);
                 break;
 
             /**
@@ -501,45 +530,43 @@ public class DccppServer extends SocketCommsServer {
              * PROGRAMMING TRACK ***
              */
             case 'R':     // <R CV CALLBACKNUM CALLBACKSUB>
-/*    
- *    reads a Configuration Variable from the decoder of an engine on the programming track
- *    
- *    CV: the number of the Configuration Variable memory location in the decoder to read from (1-1024)
- *    CALLBACKNUM: an arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs that call this function
- *    CALLBACKSUB: a second arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs (e.g. DCC++ Interface) that call this function
- *    
- *    returns: <r CALLBACKNUM|CALLBACKSUB|CV VALUE)
- *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if read could not be verified
+                /*    
+                 *    reads a Configuration Variable from the decoder of an engine on the programming track
+                 *    
+                 *    CV: the number of the Configuration Variable memory location in the decoder to read from (1-1024)
+                 *    CALLBACKNUM: an arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs that call this function
+                 *    CALLBACKSUB: a second arbitrary integer (0-32767) that is ignored by the Base Station and is simply echoed back in the output - useful for external programs (e.g. DCC++ Interface) that call this function
+                 *    
+                 *    returns: <r CALLBACKNUM|CALLBACKSUB|CV VALUE)
+                 *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if read could not be verified
                  */
-//      pRegs->readCV(com+1);
+                //      pRegs->readCV(com+1);
                 break;
 
             /**
              * *** TURN ON POWER FROM MOTOR SHIELD TO TRACKS ***
              */
             case '1':      // <1>
-/*   
- *    enables power from the motor shield to the main operations and programming tracks
- *    
- *    returns: <p1>
+                /*   
+                 *    enables power from the motor shield to the main operations and programming tracks
+                 *    
+                 *    returns: <p1>
                  */
-//     digitalWrite(SIGNAL_ENABLE_PIN_PROG,HIGH);
-//     digitalWrite(SIGNAL_ENABLE_PIN_MAIN,HIGH);
-//     INTERFACE.print("<p1>");
+                setBothTrackPower(true);
+                returnString("<p1>");
                 break;
 
             /**
              * *** TURN OFF POWER FROM MOTOR SHIELD TO TRACKS ***
              */
             case '0':     // <0>
-/*   
- *    disables power from the motor shield to the main operations and programming tracks
- *    
- *    returns: <p0>
+                /*   
+                 *    disables power from the motor shield to the main operations and programming tracks
+                 *    
+                 *    returns: <p0>
                  */
-//     digitalWrite(SIGNAL_ENABLE_PIN_PROG,LOW);
-//     digitalWrite(SIGNAL_ENABLE_PIN_MAIN,LOW);
-//     INTERFACE.print("<p0>");
+                setBothTrackPower(false);
+                returnString("<p0>");
                 break;
 
             /**
@@ -554,7 +581,11 @@ public class DccppServer extends SocketCommsServer {
                  */
                 //request a current read from the AVR and handle the return string in the AVR message processing section
 //                transmitMessageNow(SimpleDCCPacket.requestCurrentDraw());
-                System.out.println("requesting current draw");
+                //because of an issue I haven't got to the bottom of with transmitting too many messages from the AVR,
+                // this current is now reported constantly with the buffer size check
+                //therefore just immediately reply with the current current!
+                //also avoids any timeouts if a message is lost
+                //TODO leaky bucket filter?
                 returnString("<a " + current + ">");
                 break;
 
@@ -568,18 +599,12 @@ public class DccppServer extends SocketCommsServer {
              *    
              *    returns: series of status messages that can be read by an interface to determine status of DCC++ Base Station and important settings
                  */
-                if (this.mainTrackEnabled || true) {
-                    this.returnString("<p0>");
-                } else if (this.progTrackEnabled) {
-                    //TODO this logic doesn't match up to the original, which seemed to be program OR main
+                //Dccpp only supports turning them both on or off, it seems
+                if (this.mainTrackEnabled) {
                     this.returnString("<p1>");
+                } else {
+                    this.returnString("<p0>");
                 }
-
-                //      if(digitalRead(SIGNAL_ENABLE_PIN_PROG)==LOW)      // could check either PROG or MAIN
-                //        INTERFACE.print("<p0>");
-                //      else
-                //        INTERFACE.print("<p1>");
-                //
                 for (int i = 1; i < cabList.size(); i++) {
                     if (this.cabList.get(i).speed == 0) {
                         continue;
@@ -600,7 +625,22 @@ public class DccppServer extends SocketCommsServer {
                 }
 
                 //TODO actual version info
-                this.returnString("<iDCC++ compatible server for SimpleDCC>");
+                //not workiung for reasons unknown, looks okay to me in the source but clearly not
+                //this.returnString("<i DCC++ compatible server for SimpleDCC>");
+                
+                   this.returnString("<iDCC++ BASE STATION FOR ARDUINO ");
+                    this.returnString("ATMEGA644");
+                    this.returnString(" / ");
+                    this.returnString("ARDUINO");
+                    this.returnString(": V-");
+                    this.returnString("1234");
+                    this.returnString(" / ");
+                    this.returnString("2017");
+                    this.returnString(" ");
+                    this.returnString("00:00");
+                    this.returnString(">");
+                
+                
                 this.returnString("<N 1: " + this.socket.getInetAddress().toString().replace("/", "") + ">");
                 //      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
                 //      INTERFACE.print(ARDUINO_TYPE);
@@ -689,39 +729,39 @@ public class DccppServer extends SocketCommsServer {
              * OPERATIONS TRACK ***
              */
             case 'M':       // <M REGISTER BYTE1 BYTE2 [BYTE3] [BYTE4] [BYTE5]>
-/*
- *   writes a DCC packet of two, three, four, or five hexidecimal bytes to a register driving the main operations track
- *   FOR DEBUGGING AND TESTING PURPOSES ONLY.  DO NOT USE UNLESS YOU KNOW HOW TO CONSTRUCT NMRA DCC PACKETS - YOU CAN INADVERTENTLY RE-PROGRAM YOUR ENGINE DECODER
- *   
- *    REGISTER: an internal register number, from 0 through MAX_MAIN_REGISTERS (inclusive), to write (if REGISTER=0) or write and store (if REGISTER>0) the packet 
- *    BYTE1:  first hexidecimal byte in the packet
- *    BYTE2:  second hexidecimal byte in the packet
- *    BYTE3:  optional third hexidecimal byte in the packet
- *    BYTE4:  optional fourth hexidecimal byte in the packet
- *    BYTE5:  optional fifth hexidecimal byte in the packet
- *   
- *    returns: NONE   
+                /*
+                 *   writes a DCC packet of two, three, four, or five hexidecimal bytes to a register driving the main operations track
+                 *   FOR DEBUGGING AND TESTING PURPOSES ONLY.  DO NOT USE UNLESS YOU KNOW HOW TO CONSTRUCT NMRA DCC PACKETS - YOU CAN INADVERTENTLY RE-PROGRAM YOUR ENGINE DECODER
+                 *   
+                 *    REGISTER: an internal register number, from 0 through MAX_MAIN_REGISTERS (inclusive), to write (if REGISTER=0) or write and store (if REGISTER>0) the packet 
+                 *    BYTE1:  first hexidecimal byte in the packet
+                 *    BYTE2:  second hexidecimal byte in the packet
+                 *    BYTE3:  optional third hexidecimal byte in the packet
+                 *    BYTE4:  optional fourth hexidecimal byte in the packet
+                 *    BYTE5:  optional fifth hexidecimal byte in the packet
+                 *   
+                 *    returns: NONE   
                  */
-//      mRegs->writeTextPacket(com+1);
+                //wouldn't be hard to support this
+                //      mRegs->writeTextPacket(com+1);
                 break;
 
             /**
-             * *** WRITE A DCC PACKET TO ONE OF THE REGSITERS DRIVING THE MAIN
-             * OPERATIONS TRACK ***
+             * *** WRITE A DCC PACKET TO ONE OF THE REGSITERS DRIVING THE PROGRAMMING TRACK ***
              */
             case 'P':       // <P REGISTER BYTE1 BYTE2 [BYTE3] [BYTE4] [BYTE5]>
-/*
- *   writes a DCC packet of two, three, four, or five hexidecimal bytes to a register driving the programming track
- *   FOR DEBUGGING AND TESTING PURPOSES ONLY.  DO NOT USE UNLESS YOU KNOW HOW TO CONSTRUCT NMRA DCC PACKETS - YOU CAN INADVERTENTLY RE-PROGRAM YOUR ENGINE DECODER
- *   
- *    REGISTER: an internal register number, from 0 through MAX_MAIN_REGISTERS (inclusive), to write (if REGISTER=0) or write and store (if REGISTER>0) the packet 
- *    BYTE1:  first hexidecimal byte in the packet
- *    BYTE2:  second hexidecimal byte in the packet
- *    BYTE3:  optional third hexidecimal byte in the packet
- *    BYTE4:  optional fourth hexidecimal byte in the packet
- *    BYTE5:  optional fifth hexidecimal byte in the packet
- *   
- *    returns: NONE   
+            /*
+             *   writes a DCC packet of two, three, four, or five hexidecimal bytes to a register driving the programming track
+             *   FOR DEBUGGING AND TESTING PURPOSES ONLY.  DO NOT USE UNLESS YOU KNOW HOW TO CONSTRUCT NMRA DCC PACKETS - YOU CAN INADVERTENTLY RE-PROGRAM YOUR ENGINE DECODER
+             *   
+             *    REGISTER: an internal register number, from 0 through MAX_MAIN_REGISTERS (inclusive), to write (if REGISTER=0) or write and store (if REGISTER>0) the packet 
+             *    BYTE1:  first hexidecimal byte in the packet
+             *    BYTE2:  second hexidecimal byte in the packet
+             *    BYTE3:  optional third hexidecimal byte in the packet
+             *    BYTE4:  optional fourth hexidecimal byte in the packet
+             *    BYTE5:  optional fifth hexidecimal byte in the packet
+             *   
+             *    returns: NONE   
                  */
 //      pRegs->writeTextPacket(com+1);
                 break;
@@ -731,18 +771,14 @@ public class DccppServer extends SocketCommsServer {
              * ARDUINO ***
              */
             case 'F':     // <F>
-/*
- *     measure amount of free SRAM memory left on the Arduino based on trick found on the internet.
- *     Useful when setting dynamic array sizes, considering the Uno only has 2048 bytes of dynamic SRAM.
- *     Unfortunately not very reliable --- would be great to find a better method
- *     
- *     returns: <f MEM>
- *     where MEM is the number of free bytes remaining in the Arduino's SRAM
+                /*
+                 *     measure amount of free SRAM memory left on the Arduino based on trick found on the internet.
+                 *     Useful when setting dynamic array sizes, considering the Uno only has 2048 bytes of dynamic SRAM.
+                 *     Unfortunately not very reliable --- would be great to find a better method
+                 *     
+                 *     returns: <f MEM>
+                 *     where MEM is the number of free bytes remaining in the Arduino's SRAM
                  */
-//      int v; 
-//      INTERFACE.print("<f");
-//      INTERFACE.print((int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval));
-//      INTERFACE.print(">");
                 //claim there's two gigs and see what happens
                 returnString("<F 2147483648>");
                 break;
@@ -751,55 +787,35 @@ public class DccppServer extends SocketCommsServer {
              * *** LISTS BIT CONTENTS OF ALL INTERNAL DCC PACKET REGISTERS ***
              */
             case 'L':     // <L>
-/*
- *    lists the packet contents of the main operations track registers and the programming track registers
- *    FOR DIAGNOSTIC AND TESTING USE ONLY
+                /*
+                 *    lists the packet contents of the main operations track registers and the programming track registers
+                 *    FOR DIAGNOSTIC AND TESTING USE ONLY
                  */
-//      INTERFACE.println("");
-//      for(Register *p=mRegs->reg;p<=mRegs->maxLoadedReg;p++){
-//        INTERFACE.print("M"); INTERFACE.print((int)(p-mRegs->reg)); INTERFACE.print(":\t");
-//        INTERFACE.print((int)p); INTERFACE.print("\t");
-//        INTERFACE.print((int)p->activePacket); INTERFACE.print("\t");
-//        INTERFACE.print(p->activePacket->nBits); INTERFACE.print("\t");
-//        for(int i=0;i<10;i++){
-//          INTERFACE.print(p->activePacket->buf[i],HEX); INTERFACE.print("\t");
-//        }
-//        INTERFACE.println("");
-//      }
-//      for(Register *p=pRegs->reg;p<=pRegs->maxLoadedReg;p++){
-//        INTERFACE.print("P"); INTERFACE.print((int)(p-pRegs->reg)); INTERFACE.print(":\t");
-//        INTERFACE.print((int)p); INTERFACE.print("\t");
-//        INTERFACE.print((int)p->activePacket); INTERFACE.print("\t");
-//        INTERFACE.print(p->activePacket->nBits); INTERFACE.print("\t");
-//        for(int i=0;i<10;i++){
-//          INTERFACE.print(p->activePacket->buf[i],HEX); INTERFACE.print("\t");
-//        }
-//        INTERFACE.println("");
-//      }
-//      INTERFACE.println("");
+                //no point supporting this
                 break;
 
         } // switch
 
     }
-    
+
     /**
      * take an array without sync bytes and check the crc byte is valid
+     *
      * @param message from AVR
      * @return pass/fail
      */
-    public boolean checkMessageCRC(byte[] message){
+    public boolean checkMessageCRC(byte[] message) {
         CRC16 crc = new CRC16();
         //last byte in the message is the CRC byte
-        for (int i=0;i<message.length-1;i++){
+        for (int i = 0; i < message.length - 1; i++) {
             crc.update(message[i]);
         }
         byte crcResult = crc.getCrc();
-        return message[message.length-1]== crcResult;
+        return message[message.length - 1] == crcResult;
     }
-    
+
     public void processUARTResponse(byte[] message) {
-        if(!checkMessageCRC(message)){
+        if (!checkMessageCRC(message)) {
             Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Message from AVR failed CRC");
             return;
         }
@@ -808,17 +824,17 @@ public class DccppServer extends SocketCommsServer {
         switch (responseType) {
             case SimpleDCCPacket.RESPONSE_PACKET_BUFFER_SIZE:
                 int packetsInBuffer = 0xff & message[1];
-                
-                int currentDraw = (0xff & message[2]) | (message[3]<<8);
+
+                int currentDraw = (0xff & message[2]) | (message[3] << 8);
                 //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
                 //currentDraw = currentDraw << 2;
 //                System.out.println("Received current draw of " + currentDraw);
                 //gain of 11 on voltage over 0.15ohm resistor
                 //1024bit ADC 0-3.3v (assuming 3.3v supply)
-                double voltsMeasured = (((double)currentDraw)/1024)*3.3;
-                double amps = (voltsMeasured/11.0)/0.15;
-                
-                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: "+currentDraw+" = "+amps+"A", packetsInBuffer);
+                double voltsMeasured = (((double) currentDraw) / 1024) * 3.3;
+                double amps = (voltsMeasured / 11.0) / 0.15;
+
+                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: " + currentDraw + " = " + amps + "A", packetsInBuffer);
                 updateCurrentDraw(currentDraw);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
@@ -840,7 +856,11 @@ public class DccppServer extends SocketCommsServer {
     class TCPReadThread implements Runnable {
 
         private boolean running;
-
+        
+        public void stop() {
+            running = false;
+        }
+        
         @Override
         public void run() {
             running = true;
@@ -863,6 +883,8 @@ public class DccppServer extends SocketCommsServer {
             }
 
             System.out.println("Stopping TCP Read");
+            //stop everything else
+            stopEverything();
         }
     }
 
@@ -916,9 +938,9 @@ public class DccppServer extends SocketCommsServer {
             while (running) {
                 try {
                     readUntilSync();
-                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE-SimpleDCCPacket.SYNC_BYTES);
+                    ByteBuffer message = ByteBuffer.allocate(MESSAGE_SIZE - SimpleDCCPacket.SYNC_BYTES);
 
-                    for (int i = 0; i < MESSAGE_SIZE-SimpleDCCPacket.SYNC_BYTES; i++) {
+                    for (int i = 0; i < MESSAGE_SIZE - SimpleDCCPacket.SYNC_BYTES; i++) {
                         message.put((byte) (streamIn.read() & 0xff));
                     }
                     processUARTResponse(message.array());

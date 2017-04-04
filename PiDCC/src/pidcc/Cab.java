@@ -25,7 +25,8 @@ public class Cab {
     public boolean forwards;
     private int maxFunctionsUsed;
     public boolean functions[];
-    private static int REPEATS = 2;
+    //todo move this somewhere better?
+    public final static int REPEATS = 2;
 //    private static int MAX_SPEED = 127; //using speed mode 128
 
     public Cab() {
