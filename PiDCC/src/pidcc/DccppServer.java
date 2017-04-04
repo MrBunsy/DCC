@@ -84,12 +84,12 @@ public class DccppServer extends SocketCommsServer {
         uartRead = new UARTReadThread();
         (new Thread(uartRead)).start();
         
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(3));
 //        byte[] testdata = 
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(0, new byte[]{(byte)0xff}));
+        transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(0, new byte[]{(byte)0xff,(byte)0xff, (byte)0xff}));
         
         transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
         
