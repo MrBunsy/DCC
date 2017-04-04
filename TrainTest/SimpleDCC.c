@@ -746,8 +746,9 @@ void emergencyCutPower(bool mainTrack){
 }
 
 
-
+#ifdef DEBUG_LED_FLASH
 uint16_t debugledFlash = 0;
+#endif
 /************************************************************************/
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/

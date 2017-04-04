@@ -50,6 +50,6 @@
 //#define INTERFACE.print USART_TransmitString
 
 //for debugging :P
-#define DEBUG_LED_FLASH
+//#define DEBUG_LED_FLASH
 
 #endif /* INCLUDE_H_ */
