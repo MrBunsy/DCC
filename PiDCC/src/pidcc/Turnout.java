@@ -23,6 +23,10 @@ public class Turnout {
         this.thrown = thrown;
     }
     
+    public int getId(){
+        return this.id;
+    }
+    
     public boolean getThrown(){
         return this.thrown;
     }
