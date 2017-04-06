@@ -11,6 +11,8 @@ import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import com.google.gson.Gson;
+
 import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
 
 /**
@@ -33,6 +35,11 @@ public class DccppServer extends SocketCommsServer {
     private final static int UART_QUEUE_LENGTH = 10;
     private ArrayList<Turnout> turnoutList;
     private int current = 0;
+    private int shiftRegisterLength;
+    private TCPReadThread tcpRead;
+    private UARTWriteThread uartWrite;
+    private UARTReadThread uartRead;
+    private final Gson gson = new Gson();
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
         super(socket, serialComms);
@@ -40,6 +47,8 @@ public class DccppServer extends SocketCommsServer {
         this.cabList = new ArrayList<>();
         this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
         this.turnoutList = new ArrayList<>();
+        //TODO have this set dynamically, file or commandline?
+        this.shiftRegisterLength = 3;
 
 //        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
 //            this.cabList[i] = new Cab();
@@ -61,10 +70,6 @@ public class DccppServer extends SocketCommsServer {
         //IDEA - last message is also a shutdown power for the track!
         transmitMessageNow(SimpleDCCPacket.requestAVRPacketBufferSize());
     }
-
-    private TCPReadThread tcpRead;
-    private UARTWriteThread uartWrite;
-    private UARTReadThread uartRead;
 
     /**
      * run until finished, then return
@@ -89,10 +94,10 @@ public class DccppServer extends SocketCommsServer {
 //        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
 //        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
         transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(3));
-//        byte[] testdata = 
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(0, new byte[]{(byte) 0xff, (byte) 0xff, (byte) 0xff}));
-
-        transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
+////        byte[] testdata = 
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(0, new byte[]{(byte) 0xff, (byte) 0xff, (byte) 0xff}));
+//
+//        transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
 
         running = true;
         while (running) {
@@ -145,6 +150,58 @@ public class DccppServer extends SocketCommsServer {
                 Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
+    }
+
+    /**
+     * Sends a list of all turnouts to the DCCPP client over TCP
+     */
+    public void listAllTurnouts() {
+        //< H ID ADDRESS SUBADDRESS THROW > 
+        //or <X>
+        if (turnoutList.isEmpty()) {
+            returnString("<X>");
+        } else {
+            for (Turnout t : turnoutList) {
+                returnString("<H " + t.getId() + " " + t.getAddress() + " " + t.getSubAddress() + " " + (t.getThrown() ? "1" : "0") + ">");
+            }
+        }
+    }
+
+    /**
+     * retransmit the new state of the shift register
+     *
+     * TODO - have a shiftRegisterItem interface, supply that and only send part
+     * of the shift register, rather than the whole lot?
+     */
+    public void updateShiftRegister() {
+        byte[] data = new byte[shiftRegisterLength];
+
+        //is this necessary?
+        for (int i = 0; i < shiftRegisterLength; i++) {
+            data[i] = 0;
+        }
+
+        for (Turnout t : turnoutList) {
+            if (t.getAddress() < shiftRegisterLength && t.getSubAddress() < 8) {
+                //set the relevant bit
+                data[t.getAddress()] |= (byte) (((t.getThrown() ? 1 : 0) << t.getSubAddress()) & 0xff);
+            }
+        }
+        
+        //TODO probably not do this every time?
+        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(shiftRegisterLength));
+        
+        //transmit the shift register in chunks
+        for (int i = 0; i < SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE; i += SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE) {
+            int endOfRange = i + SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE;
+            if (endOfRange > shiftRegisterLength) {
+                endOfRange = shiftRegisterLength;
+            }
+            transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(i, Arrays.copyOfRange(data, i, endOfRange)));
+
+        }
+
+        transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
     }
 
     /**
@@ -226,16 +283,6 @@ public class DccppServer extends SocketCommsServer {
         }
     }
 
-    /**
-     * retransmit the new state of the shift register
-     *
-     * TODO - have a shiftRegisterItem interface, supply that and only send part
-     * of the shift register, rather than the whole lot?
-     */
-    private void updateShiftRegister() {
-
-    }
-
     public void setBothTrackPower(boolean power) {
         this.mainTrackEnabled = power;
         this.progTrackEnabled = power;
@@ -261,6 +308,7 @@ public class DccppServer extends SocketCommsServer {
         Cab cab;
         Turnout turnout;
         int id;
+        int subaddress;
 
         switch (splitCommand[0].charAt(0)) {
 
@@ -411,7 +459,7 @@ public class DccppServer extends SocketCommsServer {
                  *    returns: NONE
                  */
                 cabAddress = Integer.parseInt(splitCommand[1]);
-                int subaddress = Integer.parseInt(splitCommand[2]);
+                subaddress = Integer.parseInt(splitCommand[2]);
                 int activate = Integer.parseInt(splitCommand[3]);
                 //throwing in support for this, but no way of testing atm
                 //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
@@ -447,20 +495,21 @@ public class DccppServer extends SocketCommsServer {
                     (You pick the ID & They ares shared between Turnouts, Sensors and Outputs)
                     ADDRESS: the primary address of the decoder controlling this turnout (0-511)
                     SUBADDRESS: the subaddress of the decoder controlling this turnout (0-3)
-                
-                
-                
-                
                  */
                 switch (splitCommand.length) {
                     case 1:
                         //< T >
                         //listing all turnouts
+                        listAllTurnouts();
+
                         break;
                     case 2:
                         //< T ID >
+                        id = Integer.parseInt(splitCommand[1]);
                         //deleting a turnout
-
+                        turnout = getTurnout(id);
+                        turnoutList.remove(turnout);
+                        returnString("<O>");
                         break;
                     case 3:
                         //<T ID THROWN>
@@ -471,6 +520,8 @@ public class DccppServer extends SocketCommsServer {
                         turnout = getTurnout(id);
                         if (turnout != null) {
                             turnout.setThrown(thrown);
+                            //seems to be in contrast to what hte wiki says, but this is what the code does in PacketRegister.cpp
+                            returnString("<H " + id + " " + (thrown ? "1" : "0") + ">");
                         } else {
                             returnString("<X>");
                         }
@@ -478,9 +529,20 @@ public class DccppServer extends SocketCommsServer {
                     case 4:
                         //<T ID ADDR SUBADDR>
                         //adding new turnout
-                        
+                        id = Integer.parseInt(splitCommand[1]);
+                        //byte number
+                        int address = Integer.parseInt(splitCommand[2]);
+                        //byte position
+                        subaddress = Integer.parseInt(splitCommand[3]);
+
+                        turnout = new Turnout(id, address, subaddress);
+                        turnoutList.add(turnout);
+                        //seems to be what is returned
+                        returnString("<O>");
                         break;
                 }
+
+                updateShiftRegister();
 
                 break;
 
@@ -743,8 +805,9 @@ public class DccppServer extends SocketCommsServer {
                 //      Turnout::show();
                 //      Output::show();
                 //TODO support outputs and points
-                this.returnString("<X>");
-                this.returnString("<X>");
+                listAllTurnouts();
+                //outputs - none supported
+                returnString("<X>");
 
                 break;
 
@@ -757,7 +820,14 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <e nTurnouts nSensors>
                  */
-                //TODO serialise Turnouts to JSON (see google gson)
+                StoredState storeMe = new StoredState();
+                storeMe.shiftRegisterLength = shiftRegisterLength;
+                storeMe.turnouts = turnoutList;
+                String jsonString = gson.toJson(storeMe);
+                //TODO write to file
+                //TODO sensors?
+                returnString("<e " + turnoutList.size() + " " + 0 + ">");
+
                 break;
 
             /**
