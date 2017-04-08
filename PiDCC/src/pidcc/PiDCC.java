@@ -11,6 +11,7 @@ import jargs.gnu.CmdLineParser;
 import jargs.gnu.CmdLineParser.Option;
 
 import gnu.io.*;
+import java.io.File;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.logging.Level;
@@ -26,6 +27,8 @@ public class PiDCC {
     private CommLink comms;
     TwoWaySerialComm serialComms;
     SocketCommsClient socketComms;
+//    File settingsFile;
+    private String settingsFilePath;
 
     /**
      *
@@ -35,24 +38,27 @@ public class PiDCC {
      * @param pipeThrough Just pipe everything received on the socket through to
      * the UART
      */
-    public PiDCC(String uartPort, int port, boolean pipeThrough) {
+    public PiDCC(String uartPort, int port, boolean pipeThrough, String settingsFilePath) {
         //not connecting to the server, so must connect to serial port
         serialComms = new TwoWaySerialComm();
         try {
             System.out.println("Connecting to serial port: " + uartPort);
-            serialComms.connect(uartPort,19200);
+            serialComms.connect(uartPort, 19200);
             comms = serialComms;
         } catch (Exception ex) {
             System.err.println("Failed to connect to " + uartPort + ": " + ex.getMessage());
             System.exit(1);
         }
 
+//        settingsFile = new File(settingsFilePath);
+        this.settingsFilePath = settingsFilePath;
+
         //we're a server, so listen for connections and deal with them
-        Listener(port, serialComms, pipeThrough);
+        Listener(port, serialComms, pipeThrough, settingsFilePath);
 
     }
 
-    public static void Listener(int port, TwoWaySerialComm serialComms, boolean pipeThrough) {
+    public static void Listener(int port, TwoWaySerialComm serialComms, boolean pipeThrough, String settingsFilePath) {
 
         try {
             ServerSocket listener = new ServerSocket(port, 1);
@@ -62,9 +68,9 @@ public class PiDCC {
                 Socket socket = listener.accept();
                 SocketCommsServer server = null;
                 if (pipeThrough) {
-                     server = new SocketCommsServer(socket, serialComms);
+                    server = new SocketCommsServer(socket, serialComms);
                 } else {
-                     server = new DccppServer(socket, serialComms);
+                    server = new DccppServer(socket, serialComms, settingsFilePath);
                 }
                 //I want this to block so we aren't still listening for another client
                 server.run();
@@ -80,7 +86,8 @@ public class PiDCC {
         System.out.print("Usage: \n\n"
                 + "-s --serial Serial port to use, default: /dev/ttyS80\n"
                 + "-p --port Port for server to listen on (default 1234)\n"
-                + "-t --through Just pipe everything received on the socket through to the UART");
+                + "-t --through Just pipe everything received on the socket through to the UART\n"
+                + "-f --file Settings file for retreiving and storing turnouts (default settings.json)");
     }
 
     public static void main(String[] args) {
@@ -90,6 +97,7 @@ public class PiDCC {
         Option serialOption = parser.addStringOption('s', "serial");
         Option portOption = parser.addIntegerOption('p', "port");
         Option pipethroughOption = parser.addBooleanOption('t', "through");
+        Option fileOption = parser.addStringOption('f', "file");
 
         try {
             parser.parse(args);
@@ -99,10 +107,11 @@ public class PiDCC {
         }
 
         String serial = (String) parser.getOptionValue(serialOption, "/dev/ttyS80");
+        String file = (String) parser.getOptionValue(fileOption, "settings.json");
         boolean through = (Boolean) parser.getOptionValue(pipethroughOption, false);
         int port = (Integer) parser.getOptionValue(portOption, 1234);
 
-        PiDCC p = new PiDCC(serial, port, through);
+        PiDCC p = new PiDCC(serial, port, through, file);
 
     }
 }

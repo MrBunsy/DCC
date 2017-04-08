@@ -12,6 +12,13 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import com.google.gson.Gson;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
 
 import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
 
@@ -40,21 +47,47 @@ public class DccppServer extends SocketCommsServer {
     private UARTWriteThread uartWrite;
     private UARTReadThread uartRead;
     private final Gson gson = new Gson();
+//    private File settingsFile;
+    private String settingsFilePath;
 
-    public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
+    public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath) {
         super(socket, serialComms);
 
         this.cabList = new ArrayList<>();
         this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
         this.turnoutList = new ArrayList<>();
         //TODO have this set dynamically, file or commandline?
+        //default to 3, for now. TODO something that's not three?
         this.shiftRegisterLength = 3;
+        this.settingsFilePath = settingsFilePath;
+        try {
+//            reader = new FileReader(settingsFilePath);
+            List<String> jsonLines = Files.readAllLines(Paths.get(settingsFilePath));
+            String json="";
+            for(String line : jsonLines){
+                json+=line;
+            }
+            loadJson(json);
+
+        } catch (IOException ex) {
+            System.out.println("Settings file not found or failed to be processed: "+settingsFilePath+" ("+ex.getMessage()+")");
+        }
+        
+        updateShiftRegister();
+//        reader.r
 
 //        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
 //            this.cabList[i] = new Cab();
 //        }
     }
-
+    
+    private void loadJson(String json){
+        Gson gson = new Gson();
+        StoredState state = gson.fromJson(json, StoredState.class);
+        shiftRegisterLength = state.shiftRegisterLength;
+        turnoutList = state.turnouts;
+    }
+    
     public void updateCurrentDraw(int current) {
         this.current = current;
     }
@@ -824,6 +857,16 @@ public class DccppServer extends SocketCommsServer {
                 storeMe.shiftRegisterLength = shiftRegisterLength;
                 storeMe.turnouts = turnoutList;
                 String jsonString = gson.toJson(storeMe);
+                {
+                    try {
+                        //java 7 does python style try-with-resources!
+                        try (FileWriter writer = new FileWriter(new File(settingsFilePath))) {
+                            writer.write(jsonString);
+                        }
+                    } catch (IOException ex) {
+                        Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                }
                 //TODO write to file
                 //TODO sensors?
                 returnString("<e " + turnoutList.size() + " " + 0 + ">");
@@ -839,7 +882,9 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <O>
                  */
-
+                //TODO
+                
+                returnString("<O>");
                 break;
 
             /**
@@ -980,7 +1025,7 @@ public class DccppServer extends SocketCommsServer {
                 double voltsMeasured = (((double) currentDraw) / 1024) * 3.3;
                 double amps = (voltsMeasured / 11.0) / 0.15;
 
-                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: " + currentDraw + " = " + amps + "A", packetsInBuffer);
+                //Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: " + currentDraw + " = " + amps + "A", packetsInBuffer);
                 updateCurrentDraw(currentDraw);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
