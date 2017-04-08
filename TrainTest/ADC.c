@@ -80,10 +80,12 @@ void printADCValue(){
 //uint16_t currentCheckCount = 0;
 ISR(ADC_vect)
 {
-	if (ADCH > MAX_CURRENT){
+	//for reasons still not understood, this breaks DCC from working, leaving current checking in the DCC 'thread' for now.
+	/*if (ADCH > MAX_CURRENT){
 		highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
 	}
+	//this works fine though :S
 	currentDrawValue = ((ADCH << 2)& 0xfc) | ((ADCL>>6) & 0x03);
 
 }

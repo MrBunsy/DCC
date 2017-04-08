@@ -204,6 +204,9 @@ void setProgTrackPower(bool power){
 void setMainTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+		//reset this
+		//highCurrentDrawMainTrack = false;
+		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}
@@ -754,8 +757,8 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
-	//uint8_t temp = ADCH;
-	if (highCurrentDrawMainTrack){//temp > MAX_CURRENT || 
+	uint8_t temp = ADCH;
+	if (temp > MAX_CURRENT){// || highCurrentDrawMainTrack){
 		//highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
 		//USART_Transmit((uint8_t)'h');
