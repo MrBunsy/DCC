@@ -147,7 +147,7 @@ public class DccppServer extends SocketCommsServer {
             }
         }
 
-        System.out.println("Stopping Dccpp Server");
+        System.out.println("Stopping DCC++ Server");
     }
 
     public void requestAVRPacketBufferSize() {
@@ -1062,7 +1062,8 @@ public class DccppServer extends SocketCommsServer {
                         sb.append((char) in.read());
 
                     } catch (IOException ex) {
-                        Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                        //Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                        System.out.println("Lost TCP Connection: "+ex.getMessage());
                         running = false;
                     }
                 } while (running && sb.indexOf(">") < 0);
@@ -1070,10 +1071,11 @@ public class DccppServer extends SocketCommsServer {
                 //sb has collected an entire instruction!
                 if (running) {
                     processDccppCommand(sb.toString());
+                }else{
+                    //got here and not running any more, power off the track
+                    setBothTrackPower(false);
                 }
             }
-
-            System.out.println("Stopping TCP Read");
             //stop everything else
             stopEverything();
         }
