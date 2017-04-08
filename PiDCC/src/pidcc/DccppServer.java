@@ -11,6 +11,15 @@ import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import com.google.gson.Gson;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
+
 import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
 
 /**
@@ -33,24 +42,57 @@ public class DccppServer extends SocketCommsServer {
     private final static int UART_QUEUE_LENGTH = 10;
     private ArrayList<Turnout> turnoutList;
     private int current = 0;
+    private int shiftRegisterLength;
+    private TCPReadThread tcpRead;
+    private UARTWriteThread uartWrite;
+    private UARTReadThread uartRead;
+    private final Gson gson = new Gson();
+//    private File settingsFile;
+    private String settingsFilePath;
 
-    public DccppServer(Socket socket, TwoWaySerialComm serialComms) {
+    public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath) {
         super(socket, serialComms);
 
         this.cabList = new ArrayList<>();
         this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
         this.turnoutList = new ArrayList<>();
+        //TODO have this set dynamically, file or commandline?
+        //default to 3, for now. TODO something that's not three?
+        this.shiftRegisterLength = 3;
+        this.settingsFilePath = settingsFilePath;
+        try {
+//            reader = new FileReader(settingsFilePath);
+            List<String> jsonLines = Files.readAllLines(Paths.get(settingsFilePath));
+            String json="";
+            for(String line : jsonLines){
+                json+=line;
+            }
+            loadJson(json);
+
+        } catch (IOException ex) {
+            System.out.println("Settings file not found or failed to be processed: "+settingsFilePath+" ("+ex.getMessage()+")");
+        }
+        
+        updateShiftRegister();
+//        reader.r
 
 //        for (int i = 0; i < MAX_MAIN_REGISTERS; i++) {
 //            this.cabList[i] = new Cab();
 //        }
     }
-
+    
+    private void loadJson(String json){
+        Gson gson = new Gson();
+        StoredState state = gson.fromJson(json, StoredState.class);
+        shiftRegisterLength = state.shiftRegisterLength;
+        turnoutList = state.turnouts;
+    }
+    
     public void updateCurrentDraw(int current) {
         this.current = current;
     }
-    
-    public void stopEverything(){
+
+    public void stopEverything() {
         uartWrite.stop();
         uartRead.stop();
         //this is probably the one to have called stopeverything, but just for completeness!
@@ -61,10 +103,7 @@ public class DccppServer extends SocketCommsServer {
         //IDEA - last message is also a shutdown power for the track!
         transmitMessageNow(SimpleDCCPacket.requestAVRPacketBufferSize());
     }
-    
-    private TCPReadThread tcpRead;
-    private UARTWriteThread uartWrite;
-    private UARTReadThread uartRead;
+
     /**
      * run until finished, then return
      */
@@ -83,6 +122,15 @@ public class DccppServer extends SocketCommsServer {
         //read UART IN (this will call processUARTCommand)
         uartRead = new UARTReadThread();
         (new Thread(uartRead)).start();
+
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
+        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(3));
+////        byte[] testdata = 
+//        transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(0, new byte[]{(byte) 0xff, (byte) 0xff, (byte) 0xff}));
+//
+//        transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
 
         running = true;
         while (running) {
@@ -135,6 +183,58 @@ public class DccppServer extends SocketCommsServer {
                 Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
+    }
+
+    /**
+     * Sends a list of all turnouts to the DCCPP client over TCP
+     */
+    public void listAllTurnouts() {
+        //< H ID ADDRESS SUBADDRESS THROW > 
+        //or <X>
+        if (turnoutList.isEmpty()) {
+            returnString("<X>");
+        } else {
+            for (Turnout t : turnoutList) {
+                returnString("<H " + t.getId() + " " + t.getAddress() + " " + t.getSubAddress() + " " + (t.getThrown() ? "1" : "0") + ">");
+            }
+        }
+    }
+
+    /**
+     * retransmit the new state of the shift register
+     *
+     * TODO - have a shiftRegisterItem interface, supply that and only send part
+     * of the shift register, rather than the whole lot?
+     */
+    public void updateShiftRegister() {
+        byte[] data = new byte[shiftRegisterLength];
+
+        //is this necessary?
+        for (int i = 0; i < shiftRegisterLength; i++) {
+            data[i] = 0;
+        }
+
+        for (Turnout t : turnoutList) {
+            if (t.getAddress() < shiftRegisterLength && t.getSubAddress() < 8) {
+                //set the relevant bit
+                data[t.getAddress()] |= (byte) (((t.getThrown() ? 1 : 0) << t.getSubAddress()) & 0xff);
+            }
+        }
+        
+        //TODO probably not do this every time?
+        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(shiftRegisterLength));
+        
+        //transmit the shift register in chunks
+        for (int i = 0; i < SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE; i += SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE) {
+            int endOfRange = i + SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE;
+            if (endOfRange > shiftRegisterLength) {
+                endOfRange = shiftRegisterLength;
+            }
+            transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(i, Arrays.copyOfRange(data, i, endOfRange)));
+
+        }
+
+        transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
     }
 
     /**
@@ -192,6 +292,15 @@ public class DccppServer extends SocketCommsServer {
         return c;
     }
 
+    private Turnout getTurnout(int id) {
+        for (Turnout t : turnoutList) {
+            if (t.getId() == id) {
+                return t;
+            }
+        }
+        return null;
+    }
+
     /**
      * Transmit a SimpleDCC message to the AVR now
      *
@@ -206,8 +315,8 @@ public class DccppServer extends SocketCommsServer {
             Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
-    
-    public void setBothTrackPower(boolean power){
+
+    public void setBothTrackPower(boolean power) {
         this.mainTrackEnabled = power;
         this.progTrackEnabled = power;
         transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.MAIN_TRACK, power));
@@ -230,6 +339,9 @@ public class DccppServer extends SocketCommsServer {
         int register;
         int cabAddress;
         Cab cab;
+        Turnout turnout;
+        int id;
+        int subaddress;
 
         switch (splitCommand[0].charAt(0)) {
 
@@ -380,7 +492,7 @@ public class DccppServer extends SocketCommsServer {
                  *    returns: NONE
                  */
                 cabAddress = Integer.parseInt(splitCommand[1]);
-                int subaddress = Integer.parseInt(splitCommand[2]);
+                subaddress = Integer.parseInt(splitCommand[2]);
                 int activate = Integer.parseInt(splitCommand[3]);
                 //throwing in support for this, but no way of testing atm
                 //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
@@ -402,9 +514,69 @@ public class DccppServer extends SocketCommsServer {
                  *   
                  *   *** SEE ACCESSORIES.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "T" COMMAND
                  *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
+                
+                    Command to define a Turnout: < T ID ADDRESS SUBADDRESS >:
+                    Creates a new turnout ID, with specified ADDRESS and SUBADDRESS if turnout ID already exists, it is updated (over written) with the new specified ADDRESS and SUBADDRESS
+                    Returns: < O > if successful and < X > if unsuccessful (e.g. out of memory)
+                    Command to Delete a turnout < T ID >:
+                    Deletes the definition of a turnout with this ID
+                    Returns: < O > if successful and < X > if unsuccessful (e.g. ID does not exist)
+                    Command to List all defined turnouts: < T >:
+                    Lists all defined turnouts.
+                    Returns: < H ID ADDRESS SUBADDRESS THROW > for each defined turnout or < X > if no turnouts have beed defined or saved.
+                    ID: The numeric ID (0-32767) of the turnout to control.
+                    (You pick the ID & They ares shared between Turnouts, Sensors and Outputs)
+                    ADDRESS: the primary address of the decoder controlling this turnout (0-511)
+                    SUBADDRESS: the subaddress of the decoder controlling this turnout (0-3)
                  */
+                switch (splitCommand.length) {
+                    case 1:
+                        //< T >
+                        //listing all turnouts
+                        listAllTurnouts();
 
-                //TODO - combine with my plans for controlling points!
+                        break;
+                    case 2:
+                        //< T ID >
+                        id = Integer.parseInt(splitCommand[1]);
+                        //deleting a turnout
+                        turnout = getTurnout(id);
+                        turnoutList.remove(turnout);
+                        returnString("<O>");
+                        break;
+                    case 3:
+                        //<T ID THROWN>
+                        //turning on or off
+                        id = Integer.parseInt(splitCommand[1]);
+                        boolean thrown = Integer.parseInt(splitCommand[2]) == 1;
+                        //TODO - combine with my plans for controlling points!
+                        turnout = getTurnout(id);
+                        if (turnout != null) {
+                            turnout.setThrown(thrown);
+                            //seems to be in contrast to what hte wiki says, but this is what the code does in PacketRegister.cpp
+                            returnString("<H " + id + " " + (thrown ? "1" : "0") + ">");
+                        } else {
+                            returnString("<X>");
+                        }
+                        break;
+                    case 4:
+                        //<T ID ADDR SUBADDR>
+                        //adding new turnout
+                        id = Integer.parseInt(splitCommand[1]);
+                        //byte number
+                        int address = Integer.parseInt(splitCommand[2]);
+                        //byte position
+                        subaddress = Integer.parseInt(splitCommand[3]);
+
+                        turnout = new Turnout(id, address, subaddress);
+                        turnoutList.add(turnout);
+                        //seems to be what is returned
+                        returnString("<O>");
+                        break;
+                }
+
+                updateShiftRegister();
+
                 break;
 
             /**
@@ -434,7 +606,7 @@ public class DccppServer extends SocketCommsServer {
                 *   *** SEE SENSOR.CPP FOR COMPLETE INFO ON THE DIFFERENT VARIATIONS OF THE "S" COMMAND
                 *   USED TO CREATE/EDIT/REMOVE/SHOW SENSOR DEFINITIONS
                  */
-                
+
                 //major TODO, but not urgent
                 //return none for now
                 this.returnString("<X>");
@@ -627,20 +799,18 @@ public class DccppServer extends SocketCommsServer {
                 //TODO actual version info
                 //not workiung for reasons unknown, looks okay to me in the source but clearly not
                 //this.returnString("<i DCC++ compatible server for SimpleDCC>");
-                
-                   this.returnString("<iDCC++ BASE STATION FOR ARDUINO ");
-                    this.returnString("ATMEGA644");
-                    this.returnString(" / ");
-                    this.returnString("ARDUINO");
-                    this.returnString(": V-");
-                    this.returnString("1234");
-                    this.returnString(" / ");
-                    this.returnString("2017");
-                    this.returnString(" ");
-                    this.returnString("00:00");
-                    this.returnString(">");
-                
-                
+                this.returnString("<iDCC++ BASE STATION FOR ARDUINO ");
+                this.returnString("ATMEGA644");
+                this.returnString(" / ");
+                this.returnString("ARDUINO");
+                this.returnString(": V-");
+                this.returnString("1234");
+                this.returnString(" / ");
+                this.returnString("2017");
+                this.returnString(" ");
+                this.returnString("00:00");
+                this.returnString(">");
+
                 this.returnString("<N 1: " + this.socket.getInetAddress().toString().replace("/", "") + ">");
                 //      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
                 //      INTERFACE.print(ARDUINO_TYPE);
@@ -668,8 +838,9 @@ public class DccppServer extends SocketCommsServer {
                 //      Turnout::show();
                 //      Output::show();
                 //TODO support outputs and points
-                this.returnString("<X>");
-                this.returnString("<X>");
+                listAllTurnouts();
+                //outputs - none supported
+                returnString("<X>");
 
                 break;
 
@@ -682,7 +853,24 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <e nTurnouts nSensors>
                  */
-                //TODO serialise Turnouts to JSON (see google gson)
+                StoredState storeMe = new StoredState();
+                storeMe.shiftRegisterLength = shiftRegisterLength;
+                storeMe.turnouts = turnoutList;
+                String jsonString = gson.toJson(storeMe);
+                {
+                    try {
+                        //java 7 does python style try-with-resources!
+                        try (FileWriter writer = new FileWriter(new File(settingsFilePath))) {
+                            writer.write(jsonString);
+                        }
+                    } catch (IOException ex) {
+                        Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                }
+                //TODO write to file
+                //TODO sensors?
+                returnString("<e " + turnoutList.size() + " " + 0 + ">");
+
                 break;
 
             /**
@@ -694,7 +882,9 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <O>
                  */
-
+                //TODO
+                
+                returnString("<O>");
                 break;
 
             /**
@@ -747,10 +937,11 @@ public class DccppServer extends SocketCommsServer {
                 break;
 
             /**
-             * *** WRITE A DCC PACKET TO ONE OF THE REGSITERS DRIVING THE PROGRAMMING TRACK ***
+             * *** WRITE A DCC PACKET TO ONE OF THE REGSITERS DRIVING THE
+             * PROGRAMMING TRACK ***
              */
             case 'P':       // <P REGISTER BYTE1 BYTE2 [BYTE3] [BYTE4] [BYTE5]>
-            /*
+                /*
              *   writes a DCC packet of two, three, four, or five hexidecimal bytes to a register driving the programming track
              *   FOR DEBUGGING AND TESTING PURPOSES ONLY.  DO NOT USE UNLESS YOU KNOW HOW TO CONSTRUCT NMRA DCC PACKETS - YOU CAN INADVERTENTLY RE-PROGRAM YOUR ENGINE DECODER
              *   
@@ -834,7 +1025,7 @@ public class DccppServer extends SocketCommsServer {
                 double voltsMeasured = (((double) currentDraw) / 1024) * 3.3;
                 double amps = (voltsMeasured / 11.0) / 0.15;
 
-                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: " + currentDraw + " = " + amps + "A", packetsInBuffer);
+                //Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: " + currentDraw + " = " + amps + "A", packetsInBuffer);
                 updateCurrentDraw(currentDraw);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
@@ -856,11 +1047,11 @@ public class DccppServer extends SocketCommsServer {
     class TCPReadThread implements Runnable {
 
         private boolean running;
-        
+
         public void stop() {
             running = false;
         }
-        
+
         @Override
         public void run() {
             running = true;

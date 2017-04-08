@@ -23,7 +23,19 @@ public class Turnout {
         this.thrown = thrown;
     }
     
+    public int getId(){
+        return this.id;
+    }
+    
     public boolean getThrown(){
         return this.thrown;
+    }
+    
+    public int getAddress(){
+        return address;
+    }
+    
+    public int getSubAddress(){
+        return subaddress;
     }
 }
