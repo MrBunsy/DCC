@@ -50,15 +50,14 @@ public class DccppServer extends SocketCommsServer {
 //    private File settingsFile;
     private String settingsFilePath;
 
-    public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath) {
+    public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath, int shiftRegisterLength) {
         super(socket, serialComms);
 
         this.cabList = new ArrayList<>();
         this.uartQueue = new ArrayBlockingQueue<>(UART_QUEUE_LENGTH);
         this.turnoutList = new ArrayList<>();
-        //TODO have this set dynamically, file or commandline?
-        //default to 3, for now. TODO something that's not three?
-        this.shiftRegisterLength = 3;
+        //set from command line, but overriden if a settings file is provided.
+        this.shiftRegisterLength = shiftRegisterLength;
         this.settingsFilePath = settingsFilePath;
         try {
 //            reader = new FileReader(settingsFilePath);
@@ -190,12 +189,13 @@ public class DccppServer extends SocketCommsServer {
      */
     public void listAllTurnouts() {
         //< H ID ADDRESS SUBADDRESS THROW > 
+        // or <H ID THROW> ?
         //or <X>
         if (turnoutList.isEmpty()) {
             returnString("<X>");
         } else {
             for (Turnout t : turnoutList) {
-                returnString("<H " + t.getId() + " " + t.getAddress() + " " + t.getSubAddress() + " " + (t.getThrown() ? "1" : "0") + ">");
+                returnString("<H " + t.getId() + " "  + (t.getThrown() ? "1" : "0") + ">");//+ t.getAddress() + " " + t.getSubAddress() + " "
             }
         }
     }
