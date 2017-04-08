@@ -172,6 +172,7 @@ void simpleDCC_init() {
 	operatingState = OPERATIONS_MODE;
 	transmittingPacket = 0;
 	packetsInBuffer = 0;
+	highCurrentDrawMainTrack = false;
 	
 	int i;
 	for (i = 0; i < 20; i++) {
@@ -753,9 +754,9 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
-	uint8_t temp = ADCH;
-	if (temp > MAX_CURRENT || highCurrentDrawMainTrack){
-		highCurrentDrawMainTrack = true;
+	//uint8_t temp = ADCH;
+	if (highCurrentDrawMainTrack){//temp > MAX_CURRENT || 
+		//highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
 		//USART_Transmit((uint8_t)'h');
 		return;
