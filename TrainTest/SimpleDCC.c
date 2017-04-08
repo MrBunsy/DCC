@@ -172,6 +172,7 @@ void simpleDCC_init() {
 	operatingState = OPERATIONS_MODE;
 	transmittingPacket = 0;
 	packetsInBuffer = 0;
+	highCurrentDrawMainTrack = false;
 	
 	int i;
 	for (i = 0; i < 20; i++) {
@@ -203,6 +204,9 @@ void setProgTrackPower(bool power){
 void setMainTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+		//reset this
+		//highCurrentDrawMainTrack = false;
+		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}
@@ -754,8 +758,8 @@ uint16_t debugledFlash = 0;
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
 	uint8_t temp = ADCH;
-	if (temp > MAX_CURRENT || highCurrentDrawMainTrack){
-		highCurrentDrawMainTrack = true;
+	if (temp > MAX_CURRENT){// || highCurrentDrawMainTrack){
+		//highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
 		//USART_Transmit((uint8_t)'h');
 		return;
