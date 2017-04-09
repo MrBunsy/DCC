@@ -84,7 +84,7 @@ ISR(ADC_vect)
 	/*if (ADCH > MAX_CURRENT){
 		highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
-	}
+	}*/
 	//this works fine though :S
 	currentDrawValue = ((ADCH << 2)& 0xfc) | ((ADCL>>6) & 0x03);
 
