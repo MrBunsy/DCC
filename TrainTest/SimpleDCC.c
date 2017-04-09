@@ -728,8 +728,11 @@ uint8_t determineNextBit(dccTransmitionState_t* state) {
 			state->transmittingPacket %= PACKET_BUFFER_SIZE;
 
 			//detect what the next packet type is and set LED accordingly
-			if (state->packetBuffer[state->transmittingPacket].longPreamble) {
-				setServiceLED();
+			if (state->packetBuffer[state->transmittingPacket].longPreamble || state->serviceModeOnly) {
+				//TODO improve this logic so the service mode LED is only on when we're actually doing something in service mode
+					if(state->operatingState!=OFF){
+						setServiceLED();
+					}
 				} else if (state->packetBuffer[state->transmittingPacket].address == 0xff) {
 				//idle packet
 				setIdleLED();
