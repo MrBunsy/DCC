@@ -18,4 +18,19 @@ void printADCValue();
 
 volatile uint16_t currentDrawValue;
 
+volatile extern uint8_t mainTrackCurrent;
+volatile extern uint8_t progTrackCurrent;
+
+#define ADC_PORT PORTA
+#define ADC_PORT_DIR DDRA
+
+//set which single ended input to use
+//value = (value & ~mask) | (newvalue & mask);
+// 0001 1111
+//this is just setting the last 5 bits to the value of the adc input pin
+#define ADC_INPUT_MASK  (0x1f)
+
+#define adc_input_set(setto)	ADMUX = (ADMUX & ~ADC_INPUT_MASK) | (setto & ADC_INPUT_MASK);
+
+
 #endif /* ADC_H_ */

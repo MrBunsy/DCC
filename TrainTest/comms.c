@@ -150,8 +150,10 @@ void transmitPacketBufferSize(uint8_t size, uint8_t* currentDraw){
 	
 	message.commandType=RESPONSE_PACKET_BUFFER_SIZE;
 	message.data.packetBufferSizeData.packetsInBuffer = size;
-	message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
-	message.data.genericMessageData.data[2] = currentDraw[1];
+	//message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
+	//message.data.genericMessageData.data[2] = currentDraw[1];
+	message.data.genericMessageData.data[1] = mainTrackCurrent;
+	message.data.genericMessageData.data[2] = 0;
 	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);
@@ -234,17 +236,17 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		setCVwithDirectMode(message->data.programmeDirectByteMessageData.cv, message->data.programmeDirectByteMessageData.newValue);
+		setCVwithDirectMode(&progTrackState, message->data.programmeDirectByteMessageData.cv, message->data.programmeDirectByteMessageData.newValue);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
-		setAddress(message->data.newAddressMessageData.newAddress);
+		setAddress(&progTrackState,message->data.newAddressMessageData.newAddress);
 		break;
 		case COMMAND_OPERATIONS_MODE_PACKET:
 		
 		for (i = 0; i < message->data.opsModePacketMessageData.repeat; i++) {
-			waitForSafeToInsert();
+			waitForSafeToInsert(&mainTrackState);
 			//for(i=0;i< DUPLICATION;i++){
-			packet = getInsertPacketPointer();
+			packet = getInsertPacketPointer(&mainTrackState);
 			//address is actually just the first data byte as far as DCC/JMRI is concerned, it's *normally* address which is why I called it hta to begin with
 			packet->address = message->data.opsModePacketMessageData.address;
 			//comms protocol is assumign that address is part of the data, so subtract one from this until internally
@@ -261,7 +263,7 @@ void processMessage(message_t* message){
 			//insertSpeedPacket(message->address, 80, true, SPEEDMODE_128STEP);
 		}
 		break;
-		case COMMAND_SET_SPEED:
+		/*case COMMAND_SET_SPEED:
 		waitForSafeToInsert();
 		for (i = 0; i < DUPLICATION; i++) {
 			insertSpeedPacket(message->data.speedMessageData.address, message->data.speedMessageData.speed, message->data.speedMessageData.forwards, SPEEDMODE_128STEP);
@@ -277,11 +279,11 @@ void processMessage(message_t* message){
 		//needs testing
 		waitForSafeToInsert();
 		insertSpeedPacket(0, 1, false, SPEEDMODE_14STEP);
-		break;
-		case COMMAND_ENTER_SERVICE_MODE:
+		break;*/
+		/*case COMMAND_ENTER_SERVICE_MODE:
 		enterServiceMode();
 
-		break;
+		break;*/
 		case COMMAND_REQUEST_BUFFER_SIZE:
 		//nothing to actually do, this is done in response to every single message atm
 		break;

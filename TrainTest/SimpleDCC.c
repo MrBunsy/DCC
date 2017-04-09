@@ -7,11 +7,17 @@
 
 #include "SimpleDCC.h"
 
-//at the packet level, what is happening? EG running, entering service mode (baseStates_t)
-volatile uint8_t operatingState;
+
 
 //buffer to hold packets info to be sent
-dccPacket_t packetBuffer[PACKET_BUFFER_SIZE];
+dccPacket_t mainTrackPacketBuffer[PACKET_BUFFER_SIZE];
+dccPacket_t programmingPacketBuffer[PACKET_BUFFER_SIZE];
+
+dccTransmitionState_t mainTrackState;
+dccTransmitionState_t progTrackState;
+
+
+
 
 /*
 * where in the packet are we currently?
@@ -27,19 +33,7 @@ enum dataTransmitStates {
 	END_BIT
 };
 
-//which state are we currently in (which part of the packet are we transmitting)?
-volatile uint8_t transmitPacketState;
 
-//the packet we are currently transmitting (as a position in the packetbuffer)
-volatile uint8_t transmittingPacket;
-volatile uint8_t packetsInBuffer;
-
-//which bit of the preamble/address/data/errordetect are we transmitting?
-volatile uint8_t transmittedBits;
-//which data byte are we transmitting?
-volatile uint8_t transmittingDataByte;
-//build up the error detection byte as we transmit
-volatile uint8_t errorDetectionByte;
 
 #ifdef DEBUG_MEMORY
 volatile uint8_t debugMemory[128];
@@ -63,31 +57,31 @@ enum bitStates {
 	ZERO_LOW2
 };
 
-volatile uint8_t bitState;
+
 
 /*
 * Get a pointer to a position in the packet buffer where we can add a packet.  Also increment packetsInBuffer.
 * blocks if packet buffer is full
 */
-dccPacket_t *getInsertPacketPointer() {
-	while (packetsInBuffer == PACKET_BUFFER_SIZE);
-	dccPacket_t* p = &(packetBuffer[(transmittingPacket + packetsInBuffer) % PACKET_BUFFER_SIZE]);
-	packetsInBuffer++;
+dccPacket_t *getInsertPacketPointer(dccTransmitionState_t* state) {
+	while (state->packetsInBuffer == PACKET_BUFFER_SIZE);
+	dccPacket_t* p = &(state->packetBuffer[(state->transmittingPacket + state->packetsInBuffer) % PACKET_BUFFER_SIZE]);
+	state->packetsInBuffer++;
 	return p;
 }
 
 /************************************************************************/
 /* returns how many messages are in the buffer                          */
 /************************************************************************/
-uint8_t getPacketsInBuffer(){
-	return packetsInBuffer;
+uint8_t getPacketsInBuffer(dccTransmitionState_t* state){
+	return state->packetsInBuffer;
 }
 
 /**
 * Insert an idle packet at the end of the packetbuffer
 */
-void insertIdlePacket(bool longPreamble) {
-	dccPacket_t *packet = getInsertPacketPointer();
+void insertIdlePacket(dccTransmitionState_t* state, bool longPreamble) {
+	dccPacket_t *packet = getInsertPacketPointer(state);
 	packet->address = 0xFF;
 	packet->data[0] = 0x00;
 	packet->dataBytes = 1;
@@ -97,8 +91,8 @@ void insertIdlePacket(bool longPreamble) {
 /*
 * Insert a reset packet at the end of the packetbuffer
 */
-void insertResetPacket(bool longPreamble) {
-	dccPacket_t *packet = getInsertPacketPointer();
+void insertResetPacket(dccTransmitionState_t* state, bool longPreamble) {
+	dccPacket_t *packet = getInsertPacketPointer(state);
 	packet->address = 0x00;
 	packet->data[0] = 0x00;
 	packet->dataBytes = 1;
@@ -108,8 +102,8 @@ void insertResetPacket(bool longPreamble) {
 /*
 * Insert a page preset packet at the end of the packetbuffer
 */
-void insertPagePresetPacket(bool longPreamble) {
-	dccPacket_t *packet = getInsertPacketPointer();
+void insertPagePresetPacket(dccTransmitionState_t* state, bool longPreamble) {
+	dccPacket_t *packet = getInsertPacketPointer(state);
 	packet->address = 0b01111101;
 	packet->data[0] = 0b00000001;
 	packet->dataBytes = 1;
@@ -119,26 +113,26 @@ void insertPagePresetPacket(bool longPreamble) {
 /*
 * Run commands required as per spec to start operations mode
 */
-void enterOperationsMode(){
+void enterOperationsMode(dccTransmitionState_t* state){
 	
 	Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);// in case was turned off at the end of programming mode
 	
-	operatingState = OPERATIONS_MODE;
-	transmittingPacket = 0;
-	packetsInBuffer = 0;
+	state->operatingState = OPERATIONS_MODE;
+	state->transmittingPacket = 0;
+	state->packetsInBuffer = 0;
 	
 	int i;
 	for (i = 0; i < 20; i++) {
-		insertResetPacket(false);
+		insertResetPacket(state, false);
 	}
 
 	for (i = 0; i < 10; i++) {
-		insertIdlePacket(false);
+		insertIdlePacket(state, false);
 	}
 
 	//ready to go straight into service mode - NOT REQUIRED
 	for (i = 0; i < 20; i++) {
-		insertIdlePacket(false);
+		insertIdlePacket(state, false);
 	}
 }
 
@@ -160,32 +154,41 @@ void simpleDCC_init() {
 	
 	Clrb(DCC_PORT, DCC_PROG_TRACK_OUT);
 	Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+	
+
+	
+	mainTrackState.packetBuffer = mainTrackPacketBuffer;
+	mainTrackState.outputPin = DCC_MAIN_TRACK_OUT;
+	mainTrackState.operatingState = OPERATIONS_MODE;
+	mainTrackState.transmittingPacket = 0;
+	mainTrackState.packetsInBuffer = 0;
+	mainTrackState.serviceModeOnly = false;
+	
+	progTrackState.packetBuffer = programmingPacketBuffer;
+	progTrackState.outputPin = DCC_PROG_TRACK_OUT;
+	progTrackState.operatingState = OFF;
+	progTrackState.transmittingPacket = 0;
+	progTrackState.packetsInBuffer = 0;
+	progTrackState.serviceModeOnly=true;
+	
 	/*
 	In the case where there is no information about the previous state of the system, the Digital Command
 	Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
 	minimum of ten (10) idle packets.
 	- RP-9.2.4 DCC Fail Safe
 	*/
-
-	
-	
-	operatingState = OPERATIONS_MODE;
-	transmittingPacket = 0;
-	packetsInBuffer = 0;
-	highCurrentDrawMainTrack = false;
-	
 	int i;
 	for (i = 0; i < 20; i++) {
-		insertResetPacket(false);
+		insertResetPacket(&mainTrackState, false);
 	}
 
 	for (i = 0; i < 10; i++) {
-		insertIdlePacket(false);
+		insertIdlePacket(&mainTrackState, false);
 	}
 
 	//ready to go straight into service mode - NOT REQUIRED
 	for (i = 0; i < 20; i++) {
-		insertIdlePacket(false);
+		insertIdlePacket(&mainTrackState, false);
 	}
 	
 	//setCVwithDirectMode(1,6);
@@ -197,6 +200,7 @@ void simpleDCC_init() {
 void setProgTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
 	}
@@ -204,32 +208,34 @@ void setProgTrackPower(bool power){
 void setMainTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		//reset this
-		//highCurrentDrawMainTrack = false;
 		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}
 }
 
-bool enterServiceMode(){
+/************************************************************************/
+/* turn the programming track on and insert start-service-mode packets  */
+/************************************************************************/
+void enterServiceMode(dccTransmitionState_t * state){
+	//turn the track on
+	setProgTrackPower(true);
+	
 	uint8_t i;
-	waitForSafeToInsert();
+	waitForSafeToInsert(state);
 	for (i = 0; i <5; i++) {
-		insertResetPacket(true);
+		insertResetPacket(state,true);
 	}
-	operatingState=SERVICE_MODE;
-	return true;
-
+	state->operatingState=SERVICE_MODE;
 }
-
+/*
 void leaveServiceMode(){
 	operatingState=OPERATIONS_MODE;
 }
 
 bool isInServiceMode(){
 	return operatingState==SERVICE_MODE;
-}
+}*/
 
 /*
 * direct mode service mode to set the address CV
@@ -238,7 +244,7 @@ bool isInServiceMode(){
 *
 * cv is 10bits
 */
-bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
+bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue) {
 	/*_delay_ms(500);
 	setDataLED();
 	_delay_ms(500);
@@ -250,16 +256,17 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 
 	uint8_t i;
 	dccPacket_t *packet;
-
-	waitForSafeToInsert();
+	/*
+	waitForSafeToInsert(state);
 
 	//at least three reset packets with long preamble
 	for (i = 0; i < 10; i++) {//formerlly 5
-		insertResetPacket(true);
-	}
+		insertResetPacket(state, true);
+	}*/
+	enterServiceMode(state);
 
 	for (i = 0; i < 15; i++) {
-		packet = getInsertPacketPointer();
+		packet = getInsertPacketPointer(state);
 		/*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
 		two bit address (AA) in the first data byte being the most significant bits of the CV number.
 		CC=10 Bit Manipulation
@@ -279,49 +286,50 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 
 	//at least 6 reset packets
 	for (i = 0; i < 16; i++) {//was 8
-		insertResetPacket(true);
+		insertResetPacket(state, true);
 	}
 	
 	//a bit of a hack that will result in the power to the track being cut off briefly:
-	operatingState = LEAVE_SERVICE_MODE;
+	state->operatingState = LEAVE_SERVICE_MODE;
 	return true;
 }
 
 /*
 * Use address-only mode to set an address
 */
-bool setAddress(uint8_t newAddress) {
+bool setAddress(dccTransmitionState_t* state,  uint8_t newAddress) {
 	//return setCVwithDirectMode(1, newAddress);
 	uint8_t i;
 	dccPacket_t *packet;
 	
-	waitForSafeToInsert();
+	/*waitForSafeToInsert(state);
 	
 	//3 or more Reset Packets
 	for (i = 0; i < 5; i++) {
-		insertResetPacket(true);
-	}
+		insertResetPacket(state, true);
+	}*/
+	enterServiceMode(state);
 	
 	//5 or more Page-Preset-packets
 	for (i = 0; i < 10; i++) {
-		insertPagePresetPacket(true);
+		insertPagePresetPacket(state, true);
 	}
 	
 	//6 or more Page Preset or Reset packets (Decoder-Recovery-Time from write to Page Register)
 	for (i = 0; i < 9; i++) {
-		insertResetPacket(true);
+		insertResetPacket(state, true);
 	}
 	
 	//Optional Power Off Followed by Power-On-Cycle
 	
 	//3 or more Reset Packets
 	for (i = 0; i < 5; i++) {
-		insertResetPacket(true);
+		insertResetPacket(state, true);
 	}
 	
 	//or 5 or more Writes to CV #1
 	for (i = 0; i < 10; i++) {
-		packet = getInsertPacketPointer();
+		packet = getInsertPacketPointer(state);
 		
 		/*
 		Instructions packets using Address-Only Mode are 3 byte packets of the format:
@@ -339,12 +347,12 @@ bool setAddress(uint8_t newAddress) {
 	
 	//10 or more identical Write or Reset packets (Decoder-Recovery-Time
 	for (i = 0; i < 15; i++) {
-		insertResetPacket(true);
+		insertResetPacket(state, true);
 	}
 	
 	//Optional Power Off
 	//a bit of a hack that will result in the power to the track being cut off briefly:
-	operatingState = LEAVE_SERVICE_MODE;
+	state->operatingState = LEAVE_SERVICE_MODE;
 	return true;
 	
 	
@@ -353,13 +361,13 @@ bool setAddress(uint8_t newAddress) {
 /*
 * Turn on or off front light (this is all atm, need to understand a bit more before implementing other features)
 */
-void insertLightsPacket(uint8_t address, bool on) {
+void insertLightsPacket(dccTransmitionState_t* state,uint8_t address, bool on) {
 	/*
 	send a Function Group One Instruction
 	The format of this instruction is 100DDDDD
 	see RP-9.2.1 Extended Packet Format
 	*/
-	dccPacket_t *nextPacket = getInsertPacketPointer();
+	dccPacket_t *nextPacket = getInsertPacketPointer(state);
 	nextPacket->address = address;
 	nextPacket->data[0] = 0b10000000;
 
@@ -378,8 +386,8 @@ Speed is 2-127 in 128 speedmode
 speed 0 is stop
 speed 1,2 is emergency stop
 */
-void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mode) {
-	dccPacket_t *nextPacket = getInsertPacketPointer();
+void insertSpeedPacket(dccTransmitionState_t* state, uint8_t address, uint8_t speed, bool forwards, uint8_t mode) {
+	dccPacket_t *nextPacket = getInsertPacketPointer(state);
 	nextPacket->address = address;
 
 	if (mode == SPEEDMODE_128STEP) {
@@ -426,9 +434,9 @@ void insertSpeedPacket(uint8_t address, uint8_t speed, bool forwards, uint8_t mo
 /*
 * wait for it to be safe to insert a new packet
 */
-void waitForSafeToInsert() {
+void waitForSafeToInsert(dccTransmitionState_t* state) {
 
-	while (!safeToInsert);
+	while (!state->safeToInsert);
 }
 
 
@@ -453,12 +461,12 @@ void runDCCDemo(uint8_t address) {
 
 
 		_delay_ms(1500);
-		insertLightsPacket(address, true);
+		insertLightsPacket(&mainTrackState,address, true);
 		
 		
 		
 		//wait for it to be safe to insert a new packet
-		while (!safeToInsert);
+		while (!mainTrackState.safeToInsert);
 		//now safe!
 		(demoState)++;
 		switch (demoState) {
@@ -467,7 +475,7 @@ void runDCCDemo(uint8_t address) {
 			//USART_Transmit('f');
 			for (i = 0; i < DUPLICATION; i++) {
 				//insertSpeedPacket(address, 15, true, SPEEDMODE_14STEP);
-				insertSpeedPacket(address, 100, true, SPEEDMODE_128STEP);
+				insertSpeedPacket(&mainTrackState, address, 100, true, SPEEDMODE_128STEP);
 			}
 			break;
 			case 3:
@@ -477,14 +485,14 @@ void runDCCDemo(uint8_t address) {
 			//stop
 			//USART_Transmit('s');
 			for (i = 0; i < DUPLICATION; i++) {
-				insertSpeedPacket(address, 0, true, SPEEDMODE_128STEP);
+				insertSpeedPacket(&mainTrackState, address, 0, true, SPEEDMODE_128STEP);
 			}
 			break;
 			case 2:
 			//go backwards!
 			//USART_Transmit('b');
 			for (i = 0; i < DUPLICATION; i++) {
-				insertSpeedPacket(address, 100, false, SPEEDMODE_128STEP);
+				insertSpeedPacket(&mainTrackState, address, 100, false, SPEEDMODE_128STEP);
 			}
 			break;
 		}
@@ -529,56 +537,56 @@ void DC_Test() {
 */
 //inline
 
-dccPacket_t *getCurrentPacket() {
-	return &(packetBuffer[transmittingPacket]);
+dccPacket_t *getCurrentPacket(dccTransmitionState_t* state) {
+	return &(state->packetBuffer[state->transmittingPacket]);
 }
 
+/************************************************************************/
+/* functions for turning the LEDs on and off. SetSerivceLED should only be used by the programming track, and doens't care about data and idle
+data and idle don't carea bout the programming track, so leave service mode LED alone                                                                     */
+/************************************************************************/
 void setDataLED() {
 	Setb(LED_PORT, LED_DATA);
-	Clrb(LED_PORT, LED_SERVICE_MODE);
+	//Clrb(LED_PORT, LED_SERVICE_MODE);
 	Clrb(LED_PORT, LED_IDLE);
 }
 
 void setServiceLED() {
 	Setb(LED_PORT, LED_SERVICE_MODE);
-	Clrb(LED_PORT, LED_DATA);
-	Clrb(LED_PORT, LED_IDLE);
+	//Clrb(LED_PORT, LED_DATA);
+	//Clrb(LED_PORT, LED_IDLE);
+}
+
+void clearServiceLED(){
+	Clrb(LED_PORT, LED_SERVICE_MODE);
 }
 
 void setIdleLED() {
 	Setb(LED_PORT, LED_IDLE);
-	Clrb(LED_PORT, LED_SERVICE_MODE);
+	//Clrb(LED_PORT, LED_SERVICE_MODE);
 	Clrb(LED_PORT, LED_DATA);
 }
 
 /*
 * The packet buffer has just run out, fill it with something depending on what state we're in
 */
-void fillPacketBuffer() {
-	switch (operatingState) {
+void fillPacketBuffer(dccTransmitionState_t* state) {
+	switch (state->operatingState) {
 		case OPERATIONS_MODE:
 		//normal running mode, we just want to keep sending out idle packets
 		//TODO here is where more inteligent logic about which commands to prioritise can go
-		insertIdlePacket(false);
+		insertIdlePacket(state, false);
 		setIdleLED();
 		break;
 		case LEAVE_SERVICE_MODE:
-		// TODO remove this
-		//clear DCC output
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-		//leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
-		//we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
-		setDataLED();
-		_delay_ms(500);
-		operatingState = OPERATIONS_MODE;
-		//insertIdlePacket(false);
-		
-		enterOperationsMode();
-		
+		//power off the programming track
+		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+		state->operatingState = OFF;
+		clearServiceLED();
 		break;
 		case SERVICE_MODE:
-		insertResetPacket(true);
+		//I don't think this will occur, as generally we queue up a load of service mode commands and then set state to LEAVE_SERVICE_MODE, so once they're all executed we drop straight out
+		insertResetPacket(state, true);
 		break;
 	}
 }
@@ -591,53 +599,53 @@ NOTE transmittedBits is the bits that *will* have been transmitted after this fu
 
 TODO - THE ADDRESS CAN/SHOULD JUST BE PART OF THE DATA, then it's just preamble + various data bytes + error detection
 
-the error detection byte *appears* (this remains untested) to be all the data + Address xored togehter, furthering the
+the error detection byte is all the data + Address xored togehter, furthering the
 idea that address shouldn't be a special case
 
 
 thought - the spec does differentiate between data and address, might it be easier to comprehend if I also do?
 */
-uint8_t determineNextBit() {
-	safeToInsert = false;
-	dccPacket_t *currentPacket = getCurrentPacket();
-	switch (transmitPacketState) {
+uint8_t determineNextBit(dccTransmitionState_t* state) {
+	state->safeToInsert = false;
+	dccPacket_t *currentPacket = getCurrentPacket(state);
+	switch (state->transmitPacketState) {
 		case PREAMBLE:
 		//only allow inserting new packets while transmitting preamble
 		//in the hope that an interrupt will never try and add an idle packet at the same time as the main thread is adding new packets
-		safeToInsert = true;
-		transmittedBits++;
+		state->safeToInsert = true;
+		state->transmittedBits++;
 		//long preamble is for service mode packets
-		if (transmittedBits >= (currentPacket->longPreamble ? LONG_PREAMBLE_LENGTH : PREAMBLE_LENGTH)) {
+		if (state->transmittedBits >= (currentPacket->longPreamble ? LONG_PREAMBLE_LENGTH : PREAMBLE_LENGTH)) {
 			//this is the last bit of the preamble
-			transmitPacketState = PACKET_START_BIT;
+			state->transmitPacketState = PACKET_START_BIT;
 		}
 		return ONE_HIGH;
 		break;
 		case PACKET_START_BIT:
 		//transmitting the packet start bit, the next state will be the address
-		transmittedBits = 0;
-		transmitPacketState = ADDRESS;
+		state->transmittedBits = 0;
+		state->transmitPacketState = ADDRESS;
 		return ZERO_HIGH1;
 		break;
 		case ADDRESS:
-		transmittedBits++;
+		state->transmittedBits++;
 
-		if (transmittedBits >= 8) {
+		if (state->transmittedBits >= 8) {
 			//this is the last bit of the address, which state next?
 			if (currentPacket->dataBytes > 0) {
 				//there is data to transmit
 				//start building up the error detection byte
-				errorDetectionByte = currentPacket->address;
-				transmittingDataByte = 0;
-				transmitPacketState = DATA_START_BIT;
+				state->errorDetectionByte = currentPacket->address;
+				state->transmittingDataByte = 0;
+				state->transmitPacketState = DATA_START_BIT;
 				} else {
 				//no data to transmit
-				transmitPacketState = END_BIT;
+				state->transmitPacketState = END_BIT;
 			}
 		}
 
 		//address data to transmit
-		if (currentPacket->address & (1 << (8 - transmittedBits))) {
+		if (currentPacket->address & (1 << (8 - state->transmittedBits))) {
 			//next MSB of address is 1
 			return ONE_HIGH;
 			} else {
@@ -646,30 +654,30 @@ uint8_t determineNextBit() {
 
 		break;
 		case DATA_START_BIT:
-		transmittedBits = 0;
+		state->transmittedBits = 0;
 		//this will always be 1 based, since it gets set to zero at the end of address
-		transmittingDataByte++;
-		transmitPacketState = DATA;
+		state->transmittingDataByte++;
+		state->transmitPacketState = DATA;
 		return ZERO_HIGH1;
 		break;
 		case DATA:
-		transmittedBits++;
+		state->transmittedBits++;
 
-		if (transmittedBits >= 8) {
+		if (state->transmittedBits >= 8) {
 			//reached end of this data byte
 			//xor with error detection byte as per spec
 			//I'm fairly certain that every data byte (& address byte) should be xored together to make the final error detection byte
-			errorDetectionByte ^= currentPacket->data[transmittingDataByte - 1];
-			if (currentPacket->dataBytes > transmittingDataByte) {
+			state->errorDetectionByte ^= currentPacket->data[state->transmittingDataByte - 1];
+			if (currentPacket->dataBytes > state->transmittingDataByte) {
 				//more data bytes to transmit
-				transmitPacketState = DATA_START_BIT;
+				state->transmitPacketState = DATA_START_BIT;
 				} else {
 				//no more to transmit, start the error correction byte
-				transmitPacketState = ERROR_START_BIT;
+				state->transmitPacketState = ERROR_START_BIT;
 			}
 		}
 		//still data bits to transmit
-		if (currentPacket->data[transmittingDataByte - 1] & (1 << (8 - transmittedBits))) {
+		if (currentPacket->data[state->transmittingDataByte - 1] & (1 << (8 -state-> transmittedBits))) {
 			//jnext MSB of address is 1
 			return ONE_HIGH;
 			} else {
@@ -678,22 +686,22 @@ uint8_t determineNextBit() {
 
 		break;
 		case ERROR_START_BIT:
-		transmittedBits = 0;
+		state->transmittedBits = 0;
 		//next transmit the error detection byte
-		transmitPacketState = ERROR_DETECTION;
+		state->transmitPacketState = ERROR_DETECTION;
 
 		return ZERO_HIGH1;
 		break;
 		case ERROR_DETECTION:
-		transmittedBits++;
+		state->transmittedBits++;
 
-		if (transmittedBits >= 8) {
+		if (state->transmittedBits >= 8) {
 			//reached end of this error detection byte
-			transmitPacketState = END_BIT;
+			state->transmitPacketState = END_BIT;
 
 		}
 		//still error detection bits to transmit
-		if (errorDetectionByte & (1 << (8 - transmittedBits))) {
+		if (state->errorDetectionByte & (1 << (8 - state->transmittedBits))) {
 			//next MSB of error detect is 1
 			return ONE_HIGH;
 			} else {
@@ -704,25 +712,28 @@ uint8_t determineNextBit() {
 		case END_BIT:
 		//the end bit can form part of the next preamble
 		default:
-		transmittedBits = 0;
-		packetsInBuffer--;
-		transmitPacketState = PREAMBLE;
-		if (packetsInBuffer <= 0) {
+		state->transmittedBits = 0;
+		state->packetsInBuffer--;
+		state->transmitPacketState = PREAMBLE;
+		if (state->packetsInBuffer <= 0) {
 			//no more packets in buffer, add an idle packet
 			//the main loop will handle adding other packets
 			//packetsInBuffer = 1;
 			//insertIdlePacket(transmittingPacket);
 
 			//find what packet to put in next (usualy an idle packet)
-			fillPacketBuffer();
+			fillPacketBuffer(state);
 			} else {
-			transmittingPacket++;
-			transmittingPacket %= PACKET_BUFFER_SIZE;
+			state->transmittingPacket++;
+			state->transmittingPacket %= PACKET_BUFFER_SIZE;
 
 			//detect what the next packet type is and set LED accordingly
-			if (packetBuffer[transmittingPacket].longPreamble) {
-				setServiceLED();
-				} else if (packetBuffer[transmittingPacket].address == 0xff) {
+			if (state->packetBuffer[state->transmittingPacket].longPreamble || state->serviceModeOnly) {
+				//TODO improve this logic so the service mode LED is only on when we're actually doing something in service mode
+					if(state->operatingState!=OFF){
+						setServiceLED();
+					}
+				} else if (state->packetBuffer[state->transmittingPacket].address == 0xff) {
 				//idle packet
 				setIdleLED();
 				} else {
@@ -744,11 +755,53 @@ void emergencyCutPower(bool mainTrack){
 	if(mainTrack){
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}else{
+		//programming track
 		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
 	}
 	Setb(LED_PORT, LED_OVERCURRENT);
 }
 
+/************************************************************************/
+/* the state has all been set, set the correct outputs                  */
+/************************************************************************/
+inline void setOutputsFromInterrupt(dccTransmitionState_t* state){
+	
+	//output the right bit
+	switch (state->bitState) {
+		case ONE_HIGH:
+		case ZERO_HIGH1:
+		case ZERO_HIGH2:
+			Setb(DCC_PORT, state->outputPin);
+			break;
+		case ONE_LOW:
+		case ZERO_LOW1:
+		case ZERO_LOW2:
+			Clrb(DCC_PORT, state->outputPin);
+			break;
+	}
+	//proceed to output the rest of this bit, or work out what the next bit is
+	switch (state->bitState) {
+		case ONE_HIGH:
+		state->bitState = ONE_LOW;
+		break;
+		case ZERO_HIGH1:
+		state->bitState = ZERO_HIGH2;
+		break;
+		case ZERO_HIGH2:
+		state->bitState = ZERO_LOW1;
+		break;
+		case ZERO_LOW1:
+		state->bitState = ZERO_LOW2;
+		break;
+
+		case ONE_LOW:
+		case ZERO_LOW2:
+		default:
+		//need the next bit!
+		state->bitState = determineNextBit(state);
+		break;
+	}
+}
 
 #ifdef DEBUG_LED_FLASH
 uint16_t debugledFlash = 0;
@@ -757,70 +810,18 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
-	uint8_t temp = ADCH;
-	if (temp > MAX_CURRENT){// || highCurrentDrawMainTrack){
-		//highCurrentDrawMainTrack = true;
+	if (mainTrackCurrent > MAX_CURRENT){
 		emergencyCutPower(true);
-		//USART_Transmit((uint8_t)'h');
 		return;
-	}//TODO programming track power draw!
-	
-	
-	#ifdef DEBUG_LED_FLASH
-	debugledFlash++;
-	if(debugledFlash ==1){
-		Setb(LED_PORT, LED_SERVICE_MODE);
-		}else if(debugledFlash == 2000){
-		Clrb(LED_PORT, LED_SERVICE_MODE);
-		}else if(debugledFlash == 4000){
-		debugledFlash=0;
 	}
-	#endif
+	setOutputsFromInterrupt(&mainTrackState);
 	
+}
 
-	//output the right bit
-	switch (bitState) {
-		case ONE_HIGH:
-		case ZERO_HIGH1:
-		case ZERO_HIGH2:
-		Setb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-		//Clrb(DCC_PORT, DCC_OUT_PIN);
-		break;
-		case ONE_LOW:
-		case ZERO_LOW1:
-		case ZERO_LOW2:
-		//Setb(DCC_OUT_PORT, DCC_OUT_PIN);
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-		break;
+ISR(TIMER1_COMPA_vect) {
+	if(progTrackCurrent > MAX_PROG_CURRENT){
+		emergencyCutPower(false);
+		return;
 	}
-	//proceed to output the rest of this bit, or work out what the next bit is
-	switch (bitState) {
-		case ONE_HIGH:
-		bitState = ONE_LOW;
-		break;
-		case ZERO_HIGH1:
-		bitState = ZERO_HIGH2;
-		break;
-		case ZERO_HIGH2:
-		bitState = ZERO_LOW1;
-		break;
-		case ZERO_LOW1:
-		bitState = ZERO_LOW2;
-		break;
-
-		case ONE_LOW:
-		case ZERO_LOW2:
-		default:
-		//need the next bit!
-		bitState = determineNextBit();
-		//debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
-		#ifdef DEBUG_MEMORY
-		debugMemory[debugPosition] = (bitState == ONE_HIGH ? 1 : 0);
-		debugPosition++;
-		if (debugPosition == 127) {
-			debugPosition = 0;
-		}
-		#endif
-		break;
-	}
+	setOutputsFromInterrupt(&progTrackState);
 }
