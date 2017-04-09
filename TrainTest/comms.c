@@ -150,8 +150,10 @@ void transmitPacketBufferSize(uint8_t size, uint8_t* currentDraw){
 	
 	message.commandType=RESPONSE_PACKET_BUFFER_SIZE;
 	message.data.packetBufferSizeData.packetsInBuffer = size;
-	message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
-	message.data.genericMessageData.data[2] = currentDraw[1];
+	//message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
+	//message.data.genericMessageData.data[2] = currentDraw[1];
+	message.data.genericMessageData.data[1] = mainTrackCurrent;
+	message.data.genericMessageData.data[2] = 0;
 	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);

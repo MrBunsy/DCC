@@ -757,8 +757,8 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
-	uint8_t temp = ADCH;
-	if (temp > MAX_CURRENT){// || highCurrentDrawMainTrack){
+	//uint8_t temp = ADCH;
+	if (mainTrackCurrent > MAX_CURRENT){// || highCurrentDrawMainTrack){
 		//highCurrentDrawMainTrack = true;
 		emergencyCutPower(true);
 		//USART_Transmit((uint8_t)'h');

@@ -8,6 +8,10 @@
 #include "ADC.h"
 #include "stdio.h"
 
+//true for main track, false for prog track
+volatile bool readingMainTrack = true;
+volatile uint8_t mainTrackCurrent = 0;
+volatile uint8_t progTrackCurrent = 0;
 
 void adc_init(){
 	/*
@@ -20,6 +24,10 @@ void adc_init(){
 	If a lower resolution than 10 bits is needed, the input clock frequency
 	to the ADC can be higher than 200kHz to get a higher sample rate.
 	*/
+	
+	//ensure definitely input with no pullups
+	ADC_PORT_DIR = 0x00;
+	ADC_PORT = 0x00;
 	
 	//reference voltage: AVcc with external capacitor at AREF pin
 	Setb(ADMUX, REFS0);
@@ -35,9 +43,11 @@ void adc_init(){
 	
 	//set which single ended input to use
 	//value = (value & ~mask) | (newvalue & mask);
-	#define INPUTMASK  (0x1f) // 0001 1111
+	 // 0001 1111
 	//this is just setting the last 5 bits to the value of the adc input pin
-	ADMUX = (ADMUX & ~INPUTMASK) | (CURRENT_SENSE_MAIN_TRACK & INPUTMASK);
+	//ADMUX = (ADMUX & ~ADC_INPUT_MASK) | (CURRENT_SENSE_MAIN_TRACK & ADC_INPUT_MASK);
+	adc_input_set(CURRENT_SENSE_MAIN_TRACK);
+	readingMainTrack = true;
 	
 	//The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC) must be written to '0' in order to be enable the ADC.
 	Clrb(PRR0, PRADC);
@@ -49,12 +59,13 @@ void adc_init(){
 	Setb(ADCSRA, ADIE);
 	
 	
+	
 	//ADC will auto trigger from the source
-	Setb(ADCSRA, ADATE);
+	//Setb(ADCSRA, ADATE);
 	
 	//adc should be in free running mode by default so the above should let it run forever
 	
-	//start it running
+	//start a conversion (or free-running forever if ADATE is set in ADCSR)
 	Setb(ADCSRA, ADSC);
 }
 
@@ -77,6 +88,9 @@ void printADCValue(){
 	}
 	
 }
+
+
+
 //uint16_t currentCheckCount = 0;
 ISR(ADC_vect)
 {
@@ -86,6 +100,17 @@ ISR(ADC_vect)
 		emergencyCutPower(true);
 	}*/
 	//this works fine though :S
-	currentDrawValue = ((ADCH << 2)& 0xfc) | ((ADCL>>6) & 0x03);
-
+	//currentDrawValue = ((ADCH << 2)& 0xfc) | ((ADCL>>6) & 0x03);
+	if(readingMainTrack){
+		mainTrackCurrent = ADCH;
+		adc_input_set(CURRENT_SENSE_PROG_TRACK);
+		readingMainTrack = false;
+	}else{
+		progTrackCurrent = ADCH;
+		adc_input_set(CURRENT_SENSE_MAIN_TRACK);
+		readingMainTrack = true;
+	}
+	
+	//start next conversion
+	Setb(ADCSRA, ADSC);
 }
