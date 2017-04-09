@@ -154,26 +154,29 @@ void simpleDCC_init() {
 	
 	Clrb(DCC_PORT, DCC_PROG_TRACK_OUT);
 	Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+	
+
+	
+	mainTrackState.packetBuffer = mainTrackPacketBuffer;
+	mainTrackState.outputPin = DCC_MAIN_TRACK_OUT;
+	mainTrackState.operatingState = OPERATIONS_MODE;
+	mainTrackState.transmittingPacket = 0;
+	mainTrackState.packetsInBuffer = 0;
+	mainTrackState.serviceModeOnly = false;
+	
+	progTrackState.packetBuffer = programmingPacketBuffer;
+	progTrackState.outputPin = DCC_PROG_TRACK_OUT;
+	progTrackState.operatingState = OFF;
+	progTrackState.transmittingPacket = 0;
+	progTrackState.packetsInBuffer = 0;
+	progTrackState.serviceModeOnly=true;
+	
 	/*
 	In the case where there is no information about the previous state of the system, the Digital Command
 	Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
 	minimum of ten (10) idle packets.
 	- RP-9.2.4 DCC Fail Safe
 	*/
-
-	
-	mainTrackState.packetBuffer = mainTrackPacketBuffer;
-
-
-	progTrackState.packetBuffer = programmingPacketBuffer;
-	
-	
-	mainTrackState.operatingState = OPERATIONS_MODE;
-	mainTrackState.transmittingPacket = 0;
-	mainTrackState.packetsInBuffer = 0;
-	
-	//highCurrentDrawMainTrack = false;
-	
 	int i;
 	for (i = 0; i < 20; i++) {
 		insertResetPacket(&mainTrackState, false);
@@ -197,6 +200,7 @@ void simpleDCC_init() {
 void setProgTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
 	}
@@ -204,25 +208,27 @@ void setProgTrackPower(bool power){
 void setMainTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		//reset this
-		//highCurrentDrawMainTrack = false;
 		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}
 }
-/*
-bool enterServiceMode(){
+
+/************************************************************************/
+/* turn the programming track on and insert start-service-mode packets  */
+/************************************************************************/
+void enterServiceMode(dccTransmitionState_t * state){
+	//turn the track on
+	setProgTrackPower(true);
+	
 	uint8_t i;
-	waitForSafeToInsert();
+	waitForSafeToInsert(state);
 	for (i = 0; i <5; i++) {
-		insertResetPacket(true);
+		insertResetPacket(state,true);
 	}
-	operatingState=SERVICE_MODE;
-	return true;
-
+	state->operatingState=SERVICE_MODE;
 }
-
+/*
 void leaveServiceMode(){
 	operatingState=OPERATIONS_MODE;
 }
@@ -250,13 +256,14 @@ bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newV
 
 	uint8_t i;
 	dccPacket_t *packet;
-
+	/*
 	waitForSafeToInsert(state);
 
 	//at least three reset packets with long preamble
 	for (i = 0; i < 10; i++) {//formerlly 5
 		insertResetPacket(state, true);
-	}
+	}*/
+	enterServiceMode(state);
 
 	for (i = 0; i < 15; i++) {
 		packet = getInsertPacketPointer(state);
@@ -295,12 +302,13 @@ bool setAddress(dccTransmitionState_t* state,  uint8_t newAddress) {
 	uint8_t i;
 	dccPacket_t *packet;
 	
-	waitForSafeToInsert(state);
+	/*waitForSafeToInsert(state);
 	
 	//3 or more Reset Packets
 	for (i = 0; i < 5; i++) {
 		insertResetPacket(state, true);
-	}
+	}*/
+	enterServiceMode(state);
 	
 	//5 or more Page-Preset-packets
 	for (i = 0; i < 10; i++) {
@@ -533,21 +541,29 @@ dccPacket_t *getCurrentPacket(dccTransmitionState_t* state) {
 	return &(state->packetBuffer[state->transmittingPacket]);
 }
 
+/************************************************************************/
+/* functions for turning the LEDs on and off. SetSerivceLED should only be used by the programming track, and doens't care about data and idle
+data and idle don't carea bout the programming track, so leave service mode LED alone                                                                     */
+/************************************************************************/
 void setDataLED() {
 	Setb(LED_PORT, LED_DATA);
-	Clrb(LED_PORT, LED_SERVICE_MODE);
+	//Clrb(LED_PORT, LED_SERVICE_MODE);
 	Clrb(LED_PORT, LED_IDLE);
 }
 
 void setServiceLED() {
 	Setb(LED_PORT, LED_SERVICE_MODE);
-	Clrb(LED_PORT, LED_DATA);
-	Clrb(LED_PORT, LED_IDLE);
+	//Clrb(LED_PORT, LED_DATA);
+	//Clrb(LED_PORT, LED_IDLE);
+}
+
+void clearServiceLED(){
+	Clrb(LED_PORT, LED_SERVICE_MODE);
 }
 
 void setIdleLED() {
 	Setb(LED_PORT, LED_IDLE);
-	Clrb(LED_PORT, LED_SERVICE_MODE);
+	//Clrb(LED_PORT, LED_SERVICE_MODE);
 	Clrb(LED_PORT, LED_DATA);
 }
 
@@ -563,21 +579,13 @@ void fillPacketBuffer(dccTransmitionState_t* state) {
 		setIdleLED();
 		break;
 		case LEAVE_SERVICE_MODE:
-		// TODO remove this
-		//clear DCC output
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-		//leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
-		//we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
-		setDataLED();
-		_delay_ms(500);
-		state->operatingState = OPERATIONS_MODE;
-		//insertIdlePacket(false);
-		
-		enterOperationsMode(state);
-		
+		//power off the programming track
+		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+		state->operatingState = OFF;
+		clearServiceLED();
 		break;
 		case SERVICE_MODE:
+		//I don't think this will occur, as generally we queue up a load of service mode commands and then set state to LEAVE_SERVICE_MODE, so once they're all executed we drop straight out
 		insertResetPacket(state, true);
 		break;
 	}
@@ -591,7 +599,7 @@ NOTE transmittedBits is the bits that *will* have been transmitted after this fu
 
 TODO - THE ADDRESS CAN/SHOULD JUST BE PART OF THE DATA, then it's just preamble + various data bytes + error detection
 
-the error detection byte *appears* (this remains untested) to be all the data + Address xored togehter, furthering the
+the error detection byte is all the data + Address xored togehter, furthering the
 idea that address shouldn't be a special case
 
 
@@ -750,7 +758,9 @@ void emergencyCutPower(bool mainTrack){
 	Setb(LED_PORT, LED_OVERCURRENT);
 }
 
-
+/************************************************************************/
+/* the state has all been set, set the correct outputs                  */
+/************************************************************************/
 inline void setOutputsFromInterrupt(dccTransmitionState_t* state){
 	
 	//output the right bit
@@ -758,15 +768,13 @@ inline void setOutputsFromInterrupt(dccTransmitionState_t* state){
 		case ONE_HIGH:
 		case ZERO_HIGH1:
 		case ZERO_HIGH2:
-		Setb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-		//Clrb(DCC_PORT, DCC_OUT_PIN);
-		break;
+			Setb(DCC_PORT, state->outputPin);
+			break;
 		case ONE_LOW:
 		case ZERO_LOW1:
 		case ZERO_LOW2:
-		//Setb(DCC_OUT_PORT, DCC_OUT_PIN);
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
-		break;
+			Clrb(DCC_PORT, state->outputPin);
+			break;
 	}
 	//proceed to output the rest of this bit, or work out what the next bit is
 	switch (state->bitState) {
@@ -788,14 +796,6 @@ inline void setOutputsFromInterrupt(dccTransmitionState_t* state){
 		default:
 		//need the next bit!
 		state->bitState = determineNextBit(state);
-		//debugMemory[debugPosition/8]=bitState |= (bitState==ONE_HIGH ? 1 : 0) << (debugPosition%8);
-		#ifdef DEBUG_MEMORY
-		debugMemory[debugPosition] = (state->bitState == ONE_HIGH ? 1 : 0);
-		debugPosition++;
-		if (debugPosition == 127) {
-			debugPosition = 0;
-		}
-		#endif
 		break;
 	}
 }
@@ -807,30 +807,18 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
-	if(progTrackCurrent > MAX_PROG_CURRENT){
-		emergencyCutPower(false);
-		//don't return, in case main track is also overcurrented
-	}
-	
-	
-	//uint8_t temp = ADCH;
 	if (mainTrackCurrent > MAX_CURRENT){
 		emergencyCutPower(true);
 		return;
 	}
-	
-	
-	#ifdef DEBUG_LED_FLASH
-	debugledFlash++;
-	if(debugledFlash ==1){
-		Setb(LED_PORT, LED_SERVICE_MODE);
-		}else if(debugledFlash == 2000){
-		Clrb(LED_PORT, LED_SERVICE_MODE);
-		}else if(debugledFlash == 4000){
-		debugledFlash=0;
-	}
-	#endif
-	
 	setOutputsFromInterrupt(&mainTrackState);
 	
+}
+
+ISR(TIMER1_COMPA_vect) {
+	if(progTrackCurrent > MAX_PROG_CURRENT){
+		emergencyCutPower(false);
+		return;
+	}
+	setOutputsFromInterrupt(&progTrackState);
 }

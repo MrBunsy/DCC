@@ -39,6 +39,22 @@ void timer_init() {
 
 	OCR0A = 58; //58us, for half the period of a logical 1 for DCC
 	//this only gives 464 clock cycles between half periods
+	
+	
+	
+	Clrb(TCCR1A, WGM00);
+	Setb(TCCR1A, WGM01);
+	Clrb(TCCR1A, WGM02);
+
+	//OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable
+	Setb(TIMSK1, OCIE1A);
+
+	//set counter's clock to be systemclock/8 (so clock to timer will be 1MHz)
+	Clrb(TCCR1B, CS00);
+	Setb(TCCR1B, CS01);
+	Clrb(TCCR1B, CS02);
+
+	OCR1A = 58;
 
 	//enable interrupts globally
 	sei();

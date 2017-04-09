@@ -137,6 +137,12 @@ typedef struct{
 	
 	//true when it's safe to insert a new packet into the packetBuffer
 	volatile bool safeToInsert;
+	
+	//this output will only support service mode (the programming track)
+	bool serviceModeOnly;
+	
+	//which pin in DCC_PORT to toggle?
+	uint8_t outputPin;
 }dccTransmitionState_t;
 
 extern dccTransmitionState_t mainTrackState;
@@ -155,8 +161,8 @@ void waitForSafeToInsert(dccTransmitionState_t* state);
 void emergencyCutPower(bool mainTrack);
 
 /*bool isInServiceMode();
-void leaveServiceMode();
-bool enterServiceMode();*/
+void leaveServiceMode();*/
+void enterServiceMode(dccTransmitionState_t* state);
 
 void setServiceLED();
 void setDataLED();
@@ -172,7 +178,8 @@ typedef enum baseStates {
 	OPERATIONS_MODE,
 	SERVICE_MODE,
 	ENTER_SERVICE_MODE,
-	LEAVE_SERVICE_MODE
+	LEAVE_SERVICE_MODE,
+	OFF
 } baseStates_t;
 
 enum speedModes {
