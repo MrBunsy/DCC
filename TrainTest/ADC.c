@@ -74,33 +74,10 @@ uint8_t adc_read(){
 	return ADCH;
 }
 
-/*
-* purely for testing, spit value of ADC out over UART human readable
-*/
-char adcbuffer[8];
-void printADCValue(){
-	//for(int i=0;i<8;i++){
-	//	adcbuffer[i]=" ";
-	//}
-	sprintf(adcbuffer, "%d abc\n", ADCH);
-	for(int i=0;i<8;i++){
-		//USART_Transmit(adcbuffer[i]);
-	}
-	
-}
 
 
-
-//uint16_t currentCheckCount = 0;
 ISR(ADC_vect)
 {
-	//for reasons still not understood, this breaks DCC from working, leaving current checking in the DCC 'thread' for now.
-	/*if (ADCH > MAX_CURRENT){
-		highCurrentDrawMainTrack = true;
-		emergencyCutPower(true);
-	}*/
-	//this works fine though :S
-	//currentDrawValue = ((ADCH << 2)& 0xfc) | ((ADCL>>6) & 0x03);
 	if(readingMainTrack){
 		mainTrackCurrent = ADCH;
 		adc_input_set(CURRENT_SENSE_PROG_TRACK);

@@ -62,7 +62,8 @@
 
 
 //ADC reads 0-255, which maps to 0-Vcc. Assuming a 10ohm sense resistor, MAX_CURRENT should be 0.1*current_in_amps*255/Vcc
-#define MAX_CURRENT (150) //amp on arduino shield ensures that max current is 3.3v, so we should probably use 3.3 as our reference
+#define MAX_CURRENT (150) //amplifier on arduino shield ensures that max current is 3.3v, so we should probably use 3.3 as our reference
+#define MAX_PROG_CURRENT (75) // 25 maps to 300mA, but this is below the usual noise on the main track, so going for half the main track current for now.
 
 
 //buffer needs to be at least 50 to hold all the initialisation packets

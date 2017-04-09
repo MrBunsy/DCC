@@ -744,6 +744,7 @@ void emergencyCutPower(bool mainTrack){
 	if(mainTrack){
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}else{
+		//programming track
 		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
 	}
 	Setb(LED_PORT, LED_OVERCURRENT);
@@ -757,13 +758,17 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
+	if(progTrackCurrent > MAX_PROG_CURRENT){
+		emergencyCutPower(false);
+		//don't return, in case main track is also overcurrented
+	}
+	
+	
 	//uint8_t temp = ADCH;
-	if (mainTrackCurrent > MAX_CURRENT){// || highCurrentDrawMainTrack){
-		//highCurrentDrawMainTrack = true;
+	if (mainTrackCurrent > MAX_CURRENT){
 		emergencyCutPower(true);
-		//USART_Transmit((uint8_t)'h');
 		return;
-	}//TODO programming track power draw!
+	}
 	
 	
 	#ifdef DEBUG_LED_FLASH
