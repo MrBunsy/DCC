@@ -117,7 +117,7 @@ int main(void) {
 		//I think processInput will potentially only block if garbage is on the serial port, so if a proper message is sent at startup, that might clear it?
 		
 		//inform the listener if the packet buffer is getting low
-		uint8_t packetsInBuffer = getPacketsInBuffer();
+		uint8_t packetsInBuffer = getPacketsInBuffer(&mainTrackState);
 		//if (packetsInBuffer <= 2){
 		transmitPacketBufferSize(packetsInBuffer,(uint8_t*)&currentDrawValue);
 		//something goes seriously wrong with the comms if I try sending another message here.
