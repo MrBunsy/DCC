@@ -49,6 +49,7 @@ public class DccppServer extends SocketCommsServer {
     private final Gson gson = new Gson();
 //    private File settingsFile;
     private String settingsFilePath;
+    private final static double currentFilterAlpha = 0.5;
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath, int shiftRegisterLength) {
         super(socket, serialComms);
@@ -88,7 +89,8 @@ public class DccppServer extends SocketCommsServer {
     }
     
     public void updateCurrentDraw(int current) {
-        this.current = current;
+        //this.current = current;
+        this.current = (int)Math.round(currentFilterAlpha * current + (1-currentFilterAlpha)*this.current);
     }
 
     public void stopEverything() {
@@ -463,9 +465,6 @@ public class DccppServer extends SocketCommsServer {
                     }
                     transmitMessageNow(cab.getFunction21_28Message());
                 }
-//                }
-
-//      mRegs->setFunction(com+1);
                 break;
 
             /**
@@ -494,7 +493,7 @@ public class DccppServer extends SocketCommsServer {
                 cabAddress = Integer.parseInt(splitCommand[1]);
                 subaddress = Integer.parseInt(splitCommand[2]);
                 int activate = Integer.parseInt(splitCommand[3]);
-                //throwing in support for this, but no way of testing atm
+                //throwing in support for this, but no way of testing atm (don't have any accessory decoders!)
                 //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
                 byte[] nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
                 transmitMessageNow(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
@@ -595,6 +594,7 @@ public class DccppServer extends SocketCommsServer {
                  *   USED TO CREATE/EDIT/REMOVE/SHOW TURNOUT DEFINITIONS
                  */
                 //just say it doesn't exist, no plans to support this yet
+                //no particular reason why I couldn't GPIO on the AVR, but I'm not going to need it and it strikes me as a niche feature
                 this.returnString("<X>");
                 break;
 
@@ -608,6 +608,7 @@ public class DccppServer extends SocketCommsServer {
                  */
 
                 //major TODO, but not urgent
+                //might never support this, and instead design a new system for intergrating the computer vision sensors?
                 //return none for now
                 this.returnString("<X>");
                 break;
@@ -797,8 +798,6 @@ public class DccppServer extends SocketCommsServer {
                 }
 
                 //TODO actual version info
-                //not workiung for reasons unknown, looks okay to me in the source but clearly not
-                //this.returnString("<i DCC++ compatible server for SimpleDCC>");
                 this.returnString("<iDCC++ BASE STATION FOR ARDUINO ");
                 this.returnString("ATMEGA644");
                 this.returnString(" / ");
@@ -812,29 +811,6 @@ public class DccppServer extends SocketCommsServer {
                 this.returnString(">");
 
                 this.returnString("<N 1: " + this.socket.getInetAddress().toString().replace("/", "") + ">");
-                //      INTERFACE.print("<iDCC++ BASE STATION FOR ARDUINO ");
-                //      INTERFACE.print(ARDUINO_TYPE);
-                //      INTERFACE.print(" / ");
-                //      INTERFACE.print(MOTOR_SHIELD_NAME);
-                //      INTERFACE.print(": V-");
-                //      INTERFACE.print(VERSION);
-                //      INTERFACE.print(" / ");
-                //      INTERFACE.print(__DATE__);
-                //      INTERFACE.print(" ");
-                //      INTERFACE.print(__TIME__);
-                //      INTERFACE.print(">");
-                //
-                //      INTERFACE.print("<N");
-                //      INTERFACE.print(COMM_TYPE);
-                //      INTERFACE.print(": ");
-                //
-                //      #if COMM_TYPE == 0
-                //        INTERFACE.print("SERIAL>");
-                //      #elif COMM_TYPE == 1
-                //        INTERFACE.print(Ethernet.localIP());
-                //        INTERFACE.print(">");
-                //      #endif
-                //      
                 //      Turnout::show();
                 //      Output::show();
                 //TODO support outputs and points
@@ -882,7 +858,8 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <O>
                  */
-                //TODO
+                File settingsFile = new File(settingsFilePath);
+                settingsFile.delete();
                 
                 returnString("<O>");
                 break;
@@ -1016,17 +993,21 @@ public class DccppServer extends SocketCommsServer {
             case SimpleDCCPacket.RESPONSE_PACKET_BUFFER_SIZE:
                 int packetsInBuffer = 0xff & message[1];
 
-                int currentDraw = (0xff & message[2]) | (message[3] << 8);
+                int currentDraw = (0xff & message[2]);// | (message[3] << 8);
                 //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
-                //currentDraw = currentDraw << 2;
+                currentDraw = currentDraw << 2;
+                
+                updateCurrentDraw(currentDraw);
+                
 //                System.out.println("Received current draw of " + currentDraw);
                 //gain of 11 on voltage over 0.15ohm resistor
                 //1024bit ADC 0-3.3v (assuming 3.3v supply)
-                double voltsMeasured = (((double) currentDraw) / 1024) * 3.3;
+                double voltsMeasured = (((double) current) / 1024) * 3.3;
                 double amps = (voltsMeasured / 11.0) / 0.15;
 
-                //Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw: " + currentDraw + " = " + amps + "A", packetsInBuffer);
-                updateCurrentDraw(currentDraw);
+                
+                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw filtered:" + this.current + " new: "+currentDraw+" = " + amps + "A", packetsInBuffer);
+                
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
                 }

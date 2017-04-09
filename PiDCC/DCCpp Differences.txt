@@ -1,0 +1,4 @@
+documenting what I've implemented that is different to what's in the DCC++ wiki/documentation
+
+returned data for turnouts
+I now always return <H ID THROWN> for any return of turnout - this is how JMRI interprets it.
