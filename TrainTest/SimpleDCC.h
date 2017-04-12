@@ -113,6 +113,11 @@ typedef struct {
 } dccPacket_t;
 
 typedef struct{
+	bool success;
+	uint8_t cv;
+}cvReadResponse_t;
+
+typedef struct{
 	//at the packet level, what is happening? EG running, entering service mode (baseStates_t)
 	//TODO eventually scrap this, now that programming track and main ops are seperate tehre should be no need for it.
 	volatile uint8_t operatingState;
@@ -156,8 +161,8 @@ void insertLightsPacket(dccTransmitionState_t* state, uint8_t address, bool on);
 void insertResetPacket(dccTransmitionState_t* state, bool longPreamble);
 dccPacket_t *getInsertPacketPointer(dccTransmitionState_t* state);
 uint8_t getPacketsInBuffer(dccTransmitionState_t* state);
-bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue);
-uint8_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv);
+cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue);
+cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv);
 void waitForSafeToInsert(dccTransmitionState_t* state);
 void emergencyCutPower(bool mainTrack);
 
@@ -175,9 +180,9 @@ void setMainTrackPower(bool power);
 // Define constants used for reading CVs from the Programming Track (Straight from DCC++ PacketRegister.h - GPL)
 
 #define  ACK_BASE_COUNT            100      // number of analogRead samples to take before each CV verify to establish a baseline current
-#define  ACK_SAMPLE_COUNT          500      // number of analogRead samples to take when monitoring current after a CV verify (bit or byte) has been sent
+#define  ACK_SAMPLE_COUNT          50      // number of analogRead samples to take when monitoring current after a CV verify (bit or byte) has been sent
 #define  ACK_SAMPLE_SMOOTHING      0.2      // exponential smoothing to use in processing the analogRead samples after a CV verify (bit or byte) has been sent
-#define  ACK_SAMPLE_THRESHOLD       30      // the threshold that the exponentially-smoothed analogRead samples (after subtracting the baseline current) must cross to establish ACKNOWLEDGEMENT
+#define  ACK_SAMPLE_THRESHOLD       4      // the threshold that the exponentially-smoothed analogRead samples (after subtracting the baseline current) must cross to establish ACKNOWLEDGEMENT
 
 
 

@@ -226,11 +226,12 @@ void setMainTrackPower(bool power){
 /* turn the programming track on and insert start-service-mode packets  */
 /************************************************************************/
 void enterServiceMode(dccTransmitionState_t * state){
-	//turn the track on
+	
 	
 	
 	uint8_t i;
 	waitForSafeToInsert(state);
+	//turn the track on
 	setProgTrackPower(true);
 	
 	//Upon applying power to the track, the Command Station/Programmer must transmit at least 20
@@ -254,9 +255,80 @@ bool isInServiceMode(){
 	return operatingState==SERVICE_MODE;
 }*/
 
-uint8_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv){
+/************************************************************************/
+/* take lots of samples of the current and average them. Blocking       */
+/************************************************************************/
+uint8_t getAvgCurrent(){
+	uint16_t j;
+	uint16_t baseCurrent = 0;
+	for(j = 0;j<ACK_BASE_COUNT;j++){
+		baseCurrent+=getProgTrackValue();
+	}
+	baseCurrent/=ACK_BASE_COUNT;
 	
+	return (uint8_t)baseCurrent;
 }
+
+cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv){
+	
+
+	cvReadResponse_t response;
+	
+	response.cv = 0;
+	/*state->operatingState=OPERATIONS_MODE;
+	setProgTrackPower(true);
+	intialiseDCC(state);
+	for(uint8_t k=0;k<50;k++){
+	insertLightsPacket(state,6,true);
+	}
+	return response;*/
+	
+	cv--;
+		
+	dccPacket_t *packet;
+	uint8_t i,j;
+	uint8_t cvValue = 0;
+	uint8_t baseCurrents[8];
+	volatile uint8_t currents[8];
+	
+	enterServiceMode(state);
+	
+	uint8_t baseCurrent = getAvgCurrent();
+	
+	for(i=0;i<8;i++){
+		for(j=0;j<3;j++){
+			insertResetPacket(state,true);
+		}
+		for (j = 0; j < 8; j++) {
+			packet = getInsertPacketPointer(state);
+			packet->address = 0x78 | ((cv >> 8) & 0b11); //read CV, with the 2 MSB of CV number
+			packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+			packet->data[1] = 0xE8+i;//which bit to read
+			packet->dataBytes = 2;
+			packet->longPreamble = true;
+		}
+		
+		for(j=0;j<1;j++){
+			insertResetPacket(state,true);
+		}
+		while(getPacketsInBuffer(state) > 2);
+		
+		uint8_t current = getAvgCurrent();
+		
+		if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+			//Setb(response.cv,i);
+			cvValue |= 1<<i;
+		}
+		currents[i]=current;
+		baseCurrents[i] = baseCurrent;
+	}
+	
+	response.cv=cvValue;
+	state->operatingState = LEAVE_SERVICE_MODE;
+	return response;
+}
+
+
 
 /*
 * direct mode service mode to set the address CV
@@ -265,7 +337,7 @@ uint8_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv){
 *
 * cv is 10bits
 */
-bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue) {
+cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue) {
 	/*_delay_ms(500);
 	setDataLED();
 	_delay_ms(500);
@@ -276,8 +348,8 @@ bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newV
 	setIdleLED();*/
 
 	uint8_t i;
-	uint16_t j;
 	dccPacket_t *packet;
+	cvReadResponse_t response;
 	/*
 	waitForSafeToInsert(state);
 
@@ -311,11 +383,8 @@ bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newV
 		insertResetPacket(state, true);
 	}
 	//largely copied from DCC++ PacketRegister.cpp
-	uint16_t baseCurrent = 0;
-	for(j = 0;j<ACK_BASE_COUNT;j++){
-		baseCurrent+=getProgTrackValue();
-	}	
-	baseCurrent/=ACK_BASE_COUNT;
+	uint8_t baseCurrent = getAvgCurrent();
+	
 	//TODO get base level of current reading before this, then request verification and wait until x many packets left in buffer before reading current again!
 	
 	for(i = 0;i<3;i++){
@@ -346,25 +415,21 @@ bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newV
 	
 	//block until we've transmitted 4 of the verify packets
 	while(getPacketsInBuffer(state) > 3);
-	uint16_t current = 0;
-	for(j=0;j<ACK_SAMPLE_COUNT;j++){
-		//current=(getProgTrackValue()-baseCurrent)*ACK_SAMPLE_SMOOTHING+current*(1.0-ACK_SAMPLE_SMOOTHING);
-		current+=getProgTrackValue();
-		//if(c>ACK_SAMPLE_THRESHOLD)
-		//d=1;
-	}
-	current/=ACK_SAMPLE_COUNT;
+	uint8_t current = getAvgCurrent();
 	
 	//a bit of a hack that will result in the power to the track being cut off briefly:
 	state->operatingState = LEAVE_SERVICE_MODE;
 	
-	if(current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+	response.success = false;
+	
+	if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
 		//success!
-		return true;
+		response.success = true;
+		response.cv = newValue;
 	}
 	
 	
-	return false;
+	return response;
 }
 
 /*
@@ -887,7 +952,14 @@ ISR(TIMER0_COMPA_vect) {
 		emergencyCutPower(true);
 		return;
 	}
-	setOutputsFromInterrupt(&mainTrackState);
+	//setOutputsFromInterrupt(&mainTrackState);
+	
+	
+	if(progTrackCurrent > MAX_PROG_CURRENT){
+		emergencyCutPower(false);
+		return;
+	}
+	setOutputsFromInterrupt(&progTrackState);
 	
 }
 

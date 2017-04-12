@@ -47,6 +47,13 @@ typedef enum{
 	PROG_TRACK
 }trackType_t;
 
+typedef enum{
+	READ_PROG_TRACK=0,
+	WRITE_BYTE_PROG_TRACK,
+	WRITE_BIT_PROG_TRACK
+	
+	}cvResponseType_t;
+
 //used for finding the start of a packet:
 #define SYNC_INT (0xffccccff)
 #define NUM_SYNC_BYTES (4)
@@ -74,6 +81,7 @@ typedef struct{
 }shiftRegisterLengthMessageData_t;
 
 typedef struct{
+	uint8_t responseType;
 	uint8_t cvValue;
 	uint16_t callback;
 	uint16_t callbackSub;

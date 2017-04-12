@@ -182,7 +182,7 @@ void transmitCurrentDraw(uint8_t current){
 	transmitMessage((uint8_t*)&message);
 }
 
-void transmitReadResult(uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success){
+void transmitReadResult(uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success, cvResponseType_t responseType){
 	message_t message;
 	
 	message.commandType=RESPONSE_VERIFY;
@@ -190,6 +190,7 @@ void transmitReadResult(uint8_t cvValue,uint16_t callback, uint16_t callbackSub,
 	message.data.cvResponseData.callback=callback;
 	message.data.cvResponseData.callbackSub=callbackSub;
 	message.data.cvResponseData.success = success;
+	message.data.cvResponseData.responseType = responseType;
 	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);
@@ -237,7 +238,7 @@ uint8_t calculateCRC(message_t* message){
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
-	bool success;
+	cvReadResponse_t cvResponse;
 	//USART_Transmit('r');
 	
 	if(!checkCRC(message)){
@@ -251,8 +252,12 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		success = setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
-		transmitReadResult(message->data.cvResponseData.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub,success);
+		 cvResponse = setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		transmitReadResult( cvResponse.cv, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, WRITE_BYTE_PROG_TRACK);
+		break;
+		case COMMAND_READ_CV:
+		cvResponse = readCVWithDirectMode(&progTrackState,message->data.directByteCVMessageData.cv);
+		transmitReadResult( cvResponse.cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success, READ_PROG_TRACK);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(&progTrackState,message->data.newAddressMessageData.newAddress);
