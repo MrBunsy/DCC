@@ -50,6 +50,8 @@ public class DccppServer extends SocketCommsServer {
 //    private File settingsFile;
     private String settingsFilePath;
     private final static double currentFilterAlpha = 0.5;
+    //how many times to repeat a packet to programme a CV in ops mode
+    public final static int REPEAT_OPS_MODE_PROGRAMMING = 4;
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath, int shiftRegisterLength) {
         super(socket, serialComms);
@@ -63,16 +65,16 @@ public class DccppServer extends SocketCommsServer {
         try {
 //            reader = new FileReader(settingsFilePath);
             List<String> jsonLines = Files.readAllLines(Paths.get(settingsFilePath));
-            String json="";
-            for(String line : jsonLines){
-                json+=line;
+            String json = "";
+            for (String line : jsonLines) {
+                json += line;
             }
             loadJson(json);
 
         } catch (IOException ex) {
-            System.out.println("Settings file not found or failed to be processed: "+settingsFilePath+" ("+ex.getMessage()+")");
+            System.out.println("Settings file not found or failed to be processed: " + settingsFilePath + " (" + ex.getMessage() + ")");
         }
-        
+
         updateShiftRegister();
 //        reader.r
 
@@ -80,17 +82,17 @@ public class DccppServer extends SocketCommsServer {
 //            this.cabList[i] = new Cab();
 //        }
     }
-    
-    private void loadJson(String json){
+
+    private void loadJson(String json) {
         Gson gson = new Gson();
         StoredState state = gson.fromJson(json, StoredState.class);
         shiftRegisterLength = state.shiftRegisterLength;
         turnoutList = state.turnouts;
     }
-    
+
     public void updateCurrentDraw(int current) {
         //this.current = current;
-        this.current = (int)Math.round(currentFilterAlpha * current + (1-currentFilterAlpha)*this.current);
+        this.current = (int) Math.round(currentFilterAlpha * current + (1 - currentFilterAlpha) * this.current);
     }
 
     public void stopEverything() {
@@ -197,7 +199,7 @@ public class DccppServer extends SocketCommsServer {
             returnString("<X>");
         } else {
             for (Turnout t : turnoutList) {
-                returnString("<H " + t.getId() + " "  + (t.getThrown() ? "1" : "0") + ">");//+ t.getAddress() + " " + t.getSubAddress() + " "
+                returnString("<H " + t.getId() + " " + (t.getThrown() ? "1" : "0") + ">");//+ t.getAddress() + " " + t.getSubAddress() + " "
             }
         }
     }
@@ -222,10 +224,10 @@ public class DccppServer extends SocketCommsServer {
                 data[t.getAddress()] |= (byte) (((t.getThrown() ? 1 : 0) << t.getSubAddress()) & 0xff);
             }
         }
-        
+
         //TODO probably not do this every time?
         transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(shiftRegisterLength));
-        
+
         //transmit the shift register in chunks
         for (int i = 0; i < SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE; i += SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE) {
             int endOfRange = i + SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE;
@@ -344,6 +346,7 @@ public class DccppServer extends SocketCommsServer {
         Turnout turnout;
         int id;
         int subaddress;
+        byte[] nmra;
 
         switch (splitCommand[0].charAt(0)) {
 
@@ -495,7 +498,7 @@ public class DccppServer extends SocketCommsServer {
                 int activate = Integer.parseInt(splitCommand[3]);
                 //throwing in support for this, but no way of testing atm (don't have any accessory decoders!)
                 //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
-                byte[] nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
+                nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
                 transmitMessageNow(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
                 break;
 
@@ -627,8 +630,8 @@ public class DccppServer extends SocketCommsServer {
              * *** WRITE CONFIGURATION VARIABLE BYTE TO ENGINE DECODER ON MAIN
              * OPERATIONS TRACK ***
              */
-            case 'w':      // <w CAB CV VALUE>
-                /*
+            case 'w': // <w CAB CV VALUE>
+            /*
                  *    writes, without any verification, a Configuration Variable to the decoder of an engine on the main operations track
                  *    
                  *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
@@ -636,16 +639,22 @@ public class DccppServer extends SocketCommsServer {
                  *    VALUE: the value to be written to the Configuration Variable memory location (0-255)
                  *    
                  *    returns: NONE
-                 */
-//      mRegs->writeCVByteMain(com+1);
-                break;
+             */ {
+                cabAddress = Integer.parseInt(splitCommand[1]);
+                int cv = Integer.parseInt(splitCommand[2]);
+                int value = Integer.parseInt(splitCommand[3]);
+                nmra = NmraPacket.opsCvWriteByte(cabAddress, cabAddress > 127, cv, value);
+
+                transmitMessageNow(SimpleDCCPacket.createFromDCCPacket(nmra, REPEAT_OPS_MODE_PROGRAMMING));
+            }
+            break;
 
             /**
              * *** WRITE CONFIGURATION VARIABLE BIT TO ENGINE DECODER ON MAIN
              * OPERATIONS TRACK ***
              */
-            case 'b':      // <b CAB CV BIT VALUE>
-                /*
+            case 'b': // <b CAB CV BIT VALUE>
+            /*
                  *    writes, without any verification, a single bit within a Configuration Variable to the decoder of an engine on the main operations track
                  *    
                  *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
@@ -654,9 +663,16 @@ public class DccppServer extends SocketCommsServer {
                  *    VALUE: the value of the bit to be written (0-1)
                  *    
                  *    returns: NONE
-                 */
-//      mRegs->writeCVBitMain(com+1);
-                break;
+             */ {
+                cabAddress = Integer.parseInt(splitCommand[1]);
+                int cv = Integer.parseInt(splitCommand[2]);
+                int bit = Integer.parseInt(splitCommand[3]);
+                int value = Integer.parseInt(splitCommand[4]);
+                nmra = NmraPacket.opsCvWriteBit(cabAddress, cabAddress > 127, cv, value, bit);
+
+                transmitMessageNow(SimpleDCCPacket.createFromDCCPacket(nmra, REPEAT_OPS_MODE_PROGRAMMING));
+            }
+            break;
 
             /**
              * *** WRITE CONFIGURATION VARIABLE BYTE TO ENGINE DECODER ON
@@ -833,7 +849,7 @@ public class DccppServer extends SocketCommsServer {
                 storeMe.shiftRegisterLength = shiftRegisterLength;
                 storeMe.turnouts = turnoutList;
                 String jsonString = gson.toJson(storeMe);
-                {
+                 {
                     try {
                         //java 7 does python style try-with-resources!
                         try (FileWriter writer = new FileWriter(new File(settingsFilePath))) {
@@ -860,7 +876,7 @@ public class DccppServer extends SocketCommsServer {
                  */
                 File settingsFile = new File(settingsFilePath);
                 settingsFile.delete();
-                
+
                 returnString("<O>");
                 break;
 
@@ -996,18 +1012,16 @@ public class DccppServer extends SocketCommsServer {
                 int currentDraw = (0xff & message[2]);// | (message[3] << 8);
                 //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
                 currentDraw = currentDraw << 2;
-                
+
                 updateCurrentDraw(currentDraw);
-                
+
 //                System.out.println("Received current draw of " + currentDraw);
                 //gain of 11 on voltage over 0.15ohm resistor
                 //1024bit ADC 0-3.3v (assuming 3.3v supply)
                 double voltsMeasured = (((double) current) / 1024) * 3.3;
                 double amps = (voltsMeasured / 11.0) / 0.15;
 
-                
-                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw filtered:" + this.current + " new: "+currentDraw+" = " + amps + "A", packetsInBuffer);
-                
+                //Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw filtered:" + this.current + " new: "+currentDraw+" = " + amps + "A", packetsInBuffer);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
                 }
@@ -1044,7 +1058,7 @@ public class DccppServer extends SocketCommsServer {
 
                     } catch (IOException ex) {
                         //Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
-                        System.out.println("Lost TCP Connection: "+ex.getMessage());
+                        System.out.println("Lost TCP Connection: " + ex.getMessage());
                         running = false;
                     }
                 } while (running && sb.indexOf(">") < 0);
@@ -1052,7 +1066,7 @@ public class DccppServer extends SocketCommsServer {
                 //sb has collected an entire instruction!
                 if (running) {
                     processDccppCommand(sb.toString());
-                }else{
+                } else {
                     //got here and not running any more, power off the track
                     setBothTrackPower(false);
                 }
