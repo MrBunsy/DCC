@@ -729,7 +729,14 @@ public class DccppServer extends SocketCommsServer {
                  *    returns: <r CALLBACKNUM|CALLBACKSUB|CV VALUE)
                  *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if read could not be verified
                  */
-                //      pRegs->readCV(com+1);
+                {
+                int cv = Integer.parseInt(splitCommand[1]);
+                int callback = Integer.parseInt(splitCommand[2]);
+                int callbacksub = Integer.parseInt(splitCommand[3]);
+                transmitMessageNow(SimpleDCCPacket.readCVDirectByte(cv, callback, callbacksub));
+                //the AVR should respond, and that will be processed in the UART read thread
+                //TODO a proper timeout system?
+                }
                 break;
 
             /**
@@ -1029,6 +1036,19 @@ public class DccppServer extends SocketCommsServer {
             case SimpleDCCPacket.RESPONSE_COMMS_ERROR:
                 int errorType = 0xff & message[1];
                 Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Comms error from AVR type: {0}", errorType);
+                break;
+            case SimpleDCCPacket.RESPONSE_CV:
+                switch(message[1]&0xff){
+                    case SimpleDCCPacket.CV_READ_PROG_TRACK:
+                    {
+                        int cvValue = message[2];
+                        int callBackNum = (message[3]&0xff) | ((message[4] & 0xff)<<8);
+                        int callBackSub = (message[5]&0xff) | ((message[6] & 0xff)<<8);
+                        //<r CALLBACKNUM|CALLBACKSUB|CV VALUE>
+                        returnString("<r "+callBackNum+"|"+callBackSub+"|"+cvValue+">");
+                    }
+                        break;
+                }
                 break;
 //            case SimpleDCCPacket.RESPONSE_CURRENT:
 //                int currentDraw = 0xff & message[1];
