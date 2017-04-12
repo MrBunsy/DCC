@@ -157,6 +157,7 @@ void insertResetPacket(dccTransmitionState_t* state, bool longPreamble);
 dccPacket_t *getInsertPacketPointer(dccTransmitionState_t* state);
 uint8_t getPacketsInBuffer(dccTransmitionState_t* state);
 bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue);
+uint8_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv);
 void waitForSafeToInsert(dccTransmitionState_t* state);
 void emergencyCutPower(bool mainTrack);
 
@@ -171,8 +172,14 @@ void setIdleLED();
 void setProgTrackPower(bool power);
 void setMainTrackPower(bool power);
 
-//not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
-//service mode is going to need overhauling with dccpp I think
+// Define constants used for reading CVs from the Programming Track (Straight from DCC++ PacketRegister.h - GPL)
+
+#define  ACK_BASE_COUNT            100      // number of analogRead samples to take before each CV verify to establish a baseline current
+#define  ACK_SAMPLE_COUNT          500      // number of analogRead samples to take when monitoring current after a CV verify (bit or byte) has been sent
+#define  ACK_SAMPLE_SMOOTHING      0.2      // exponential smoothing to use in processing the analogRead samples after a CV verify (bit or byte) has been sent
+#define  ACK_SAMPLE_THRESHOLD       30      // the threshold that the exponentially-smoothed analogRead samples (after subtracting the baseline current) must cross to establish ACKNOWLEDGEMENT
+
+
 
 typedef enum baseStates {
 	OPERATIONS_MODE,

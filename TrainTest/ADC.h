@@ -15,11 +15,13 @@
 void adc_init();
 uint8_t adc_read();
 void printADCValue();
+uint8_t getProgTrackValue();
 
 volatile uint16_t currentDrawValue;
 
 volatile extern uint8_t mainTrackCurrent;
 volatile extern uint8_t progTrackCurrent;
+//volatile extern bool progTrackCurrentUpdated;
 
 #define ADC_PORT PORTA
 #define ADC_PORT_DIR DDRA

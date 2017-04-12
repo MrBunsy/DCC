@@ -31,7 +31,7 @@
 
 #define  PROCESSOR     ATMEGA644
 
-#include "arduino/Arduino.h"
+//#include "arduino/Arduino.h"
 
 //things from DCCpp_Uno.h
 #define COMM_TYPE 0

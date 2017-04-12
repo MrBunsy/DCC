@@ -33,11 +33,13 @@ typedef enum {
 	COMMAND_SET_SHIFT_REGISTER_LENGTH,
 	COMMAND_SHIFT_REGISTER_DATA,//part (or all) of the data to be sent out over SPI, then have the enable pin raised.
 	COMMAND_OUTPUT_SHIFT_REGISTER,
+	COMMAND_READ_CV,
 	
 	RESPONSE_PACKET_BUFFER_SIZE = 100, //inform the listener how many packets are currently in the buffer
 	RESPONSE_COMMS_ERROR,
 	//current current draw measured from ADC
 	REPONSE_CURRENT,
+	RESPONSE_VERIFY,
 } commandType_t;
 
 typedef enum{
@@ -71,6 +73,13 @@ typedef struct{
 	uint16_t length;
 }shiftRegisterLengthMessageData_t;
 
+typedef struct{
+	uint8_t cvValue;
+	uint16_t callback;
+	uint16_t callbackSub;
+	uint8_t success;
+}cvResponseMessageData_t;
+
 typedef struct {
 	uint8_t address;
 	uint8_t speed;
@@ -98,8 +107,11 @@ typedef struct {
 
 typedef struct{
 	uint16_t cv;
+	uint16_t callback;
+	uint16_t callbackSub;
+	//at end so this message can be used by both read and write
 	uint8_t newValue;
-} programmeDirectByteMessageData_t;
+} directByteCVMessageData_t;
 
 typedef struct{
 	uint8_t packetsInBuffer;
@@ -120,12 +132,13 @@ typedef union {
 	lightsMessageData_t lightsMessageData;
 	newAddressMessageData_t newAddressMessageData;
 	opsModePacketMessageData_t opsModePacketMessageData;
-	programmeDirectByteMessageData_t programmeDirectByteMessageData;
+	directByteCVMessageData_t directByteCVMessageData;
 	packetBufferSizeData_t packetBufferSizeData;
 	currentDrawData_t currentDrawData;
 	trackPoweredData_t trackPoweredData;
 	shiftregisterMessageData_t shiftRegisterData;
 	shiftRegisterLengthMessageData_t shiftRegisterLengthData;
+	cvResponseMessageData_t cvResponseData;
 } messageDataUnion_t;
 
 //#pragma pack(1)

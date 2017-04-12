@@ -181,6 +181,20 @@ void transmitCurrentDraw(uint8_t current){
 	
 	transmitMessage((uint8_t*)&message);
 }
+
+void transmitReadResult(uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success){
+	message_t message;
+	
+	message.commandType=RESPONSE_VERIFY;
+	message.data.cvResponseData.cvValue=cvValue;
+	message.data.cvResponseData.callback=callback;
+	message.data.cvResponseData.callbackSub=callbackSub;
+	message.data.cvResponseData.success = success;
+	message.crc = calculateCRC(&message);
+	
+	transmitMessage((uint8_t*)&message);
+}
+
 /************************************************************************/
 /* Transmit a message over UART                                         */
 /************************************************************************/
@@ -223,6 +237,7 @@ uint8_t calculateCRC(message_t* message){
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
+	bool success;
 	//USART_Transmit('r');
 	
 	if(!checkCRC(message)){
@@ -236,7 +251,8 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		setCVwithDirectMode(&progTrackState, message->data.programmeDirectByteMessageData.cv, message->data.programmeDirectByteMessageData.newValue);
+		success = setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		transmitReadResult(message->data.cvResponseData.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub,success);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(&progTrackState,message->data.newAddressMessageData.newAddress);
@@ -414,7 +430,7 @@ void oldprocessInput(bool blocking) {
 			/*
 			* Pop into programming mode, write the CV, pop back out.
 			*/
-			setCVwithDirectMode(message.data.programmeDirectByteMessageData.cv, message.data.programmeDirectByteMessageData.newValue);
+			setCVwithDirectMode(message.data.programmeDirectByteMessageData.cvValue, message.data.programmeDirectByteMessageData.newValue);
 			break;
 			case COMMAND_PROGRAMME_ADDRESS:
 			setAddress(message.data.newAddressMessageData.newAddress);

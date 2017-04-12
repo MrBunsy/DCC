@@ -136,6 +136,31 @@ void enterOperationsMode(dccTransmitionState_t* state){
 	}
 }
 
+/************************************************************************/
+/* After powering on a track, perform the setup                         */
+/************************************************************************/
+void intialiseDCC(dccTransmitionState_t* state){
+	/*
+	In the case where there is no information about the previous state of the system, the Digital Command
+	Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
+	minimum of ten (10) idle packets.
+	- RP-9.2.4 DCC Fail Safe
+	*/
+	int i;
+	for (i = 0; i < 20; i++) {
+		insertResetPacket(&mainTrackState, false);
+	}
+
+	for (i = 0; i < 10; i++) {
+		insertIdlePacket(&mainTrackState, false);
+	}
+
+	//ready to go straight into service mode - NOT REQUIRED
+	for (i = 0; i < 20; i++) {
+		insertIdlePacket(&mainTrackState, false);
+	}
+}
+
 void simpleDCC_init() {
 	//set DCC pins to output
 	Setb(DCC_DIRECTION, DCC_MAIN_TRACK_OUT);
@@ -171,25 +196,7 @@ void simpleDCC_init() {
 	progTrackState.packetsInBuffer = 0;
 	progTrackState.serviceModeOnly=true;
 	
-	/*
-	In the case where there is no information about the previous state of the system, the Digital Command
-	Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
-	minimum of ten (10) idle packets.
-	- RP-9.2.4 DCC Fail Safe
-	*/
-	int i;
-	for (i = 0; i < 20; i++) {
-		insertResetPacket(&mainTrackState, false);
-	}
-
-	for (i = 0; i < 10; i++) {
-		insertIdlePacket(&mainTrackState, false);
-	}
-
-	//ready to go straight into service mode - NOT REQUIRED
-	for (i = 0; i < 20; i++) {
-		insertIdlePacket(&mainTrackState, false);
-	}
+	intialiseDCC(&mainTrackState);
 	
 	//setCVwithDirectMode(1,6);
 }
@@ -207,6 +214,7 @@ void setProgTrackPower(bool power){
 }
 void setMainTrackPower(bool power){
 	if(power){
+		//TODO intialiseDCC() cleanly
 		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
@@ -219,10 +227,19 @@ void setMainTrackPower(bool power){
 /************************************************************************/
 void enterServiceMode(dccTransmitionState_t * state){
 	//turn the track on
-	setProgTrackPower(true);
+	
 	
 	uint8_t i;
 	waitForSafeToInsert(state);
+	setProgTrackPower(true);
+	
+	//Upon applying power to the track, the Command Station/Programmer must transmit at least 20
+	//valid packets to the Digital Decoder to allow it time to stabilize internal operation before any Service Mode
+	//operations are initiated.
+	//using the usual initialise
+	intialiseDCC(state);
+	
+	//at least three reset packets with long preamble
 	for (i = 0; i <5; i++) {
 		insertResetPacket(state,true);
 	}
@@ -237,10 +254,14 @@ bool isInServiceMode(){
 	return operatingState==SERVICE_MODE;
 }*/
 
+uint8_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv){
+	
+}
+
 /*
 * direct mode service mode to set the address CV
 *
-* returns false if unsuccessful (although atm this will only happen if we can't enter service mode due to mech switch)
+* returns if verify successful
 *
 * cv is 10bits
 */
@@ -255,6 +276,7 @@ bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newV
 	setIdleLED();*/
 
 	uint8_t i;
+	uint16_t j;
 	dccPacket_t *packet;
 	/*
 	waitForSafeToInsert(state);
@@ -288,10 +310,61 @@ bool setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newV
 	for (i = 0; i < 16; i++) {//was 8
 		insertResetPacket(state, true);
 	}
+	//largely copied from DCC++ PacketRegister.cpp
+	uint16_t baseCurrent = 0;
+	for(j = 0;j<ACK_BASE_COUNT;j++){
+		baseCurrent+=getProgTrackValue();
+	}	
+	baseCurrent/=ACK_BASE_COUNT;
+	//TODO get base level of current reading before this, then request verification and wait until x many packets left in buffer before reading current again!
+	
+	for(i = 0;i<3;i++){
+		insertResetPacket(state, true);
+	}
+	
+	for (i = 0; i < 5; i++) {
+		packet = getInsertPacketPointer(state);
+		/*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
+		two bit address (AA) in the first data byte being the most significant bits of the CV number.
+		CC=10 Bit Manipulation
+		CC=01 Verify byte
+		CC=11 Write byte
+		*/
+		//cv '1' is actually cv 0
+		cv--;
+		
+		packet->address = 0x74 | ((cv >> 8) & 0b11); //re-verify entire byte
+		packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+		packet->data[1] = newValue;
+		packet->dataBytes = 2;
+		packet->longPreamble = true;
+	}
+	
+	for(i = 0;i<2;i++){
+		insertResetPacket(state, true);
+	}
+	
+	//block until we've transmitted 4 of the verify packets
+	while(getPacketsInBuffer(state) > 3);
+	uint16_t current = 0;
+	for(j=0;j<ACK_SAMPLE_COUNT;j++){
+		//current=(getProgTrackValue()-baseCurrent)*ACK_SAMPLE_SMOOTHING+current*(1.0-ACK_SAMPLE_SMOOTHING);
+		current+=getProgTrackValue();
+		//if(c>ACK_SAMPLE_THRESHOLD)
+		//d=1;
+	}
+	current/=ACK_SAMPLE_COUNT;
 	
 	//a bit of a hack that will result in the power to the track being cut off briefly:
 	state->operatingState = LEAVE_SERVICE_MODE;
-	return true;
+	
+	if(current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+		//success!
+		return true;
+	}
+	
+	
+	return false;
 }
 
 /*
