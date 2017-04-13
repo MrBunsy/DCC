@@ -274,7 +274,7 @@ cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv)
 
 	cvReadResponse_t response;
 	
-	response.cv = 0;
+	response.cvValue = 0;
 	/*state->operatingState=OPERATIONS_MODE;
 	setProgTrackPower(true);
 	intialiseDCC(state);
@@ -323,7 +323,7 @@ cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv)
 		baseCurrents[i] = baseCurrent;
 	}
 	
-	response.cv=cvValue;
+	response.cvValue=cvValue;
 	state->operatingState = LEAVE_SERVICE_MODE;
 	return response;
 }
@@ -425,7 +425,7 @@ cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, 
 	if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
 		//success!
 		response.success = true;
-		response.cv = newValue;
+		response.cvValue = newValue;
 	}
 	
 	
@@ -917,6 +917,10 @@ inline void setOutputsFromInterrupt(dccTransmitionState_t* state){
 			Clrb(DCC_PORT, state->outputPin);
 			break;
 	}
+	
+}
+
+inline void updateNextOutput(dccTransmitionState_t* state){
 	//proceed to output the rest of this bit, or work out what the next bit is
 	switch (state->bitState) {
 		case ONE_HIGH:
@@ -950,16 +954,17 @@ uint16_t debugledFlash = 0;
 ISR(TIMER0_COMPA_vect) {
 	if (mainTrackCurrent > MAX_CURRENT){
 		emergencyCutPower(true);
-		return;
+		//return;
 	}
-	//setOutputsFromInterrupt(&mainTrackState);
-	
-	
 	if(progTrackCurrent > MAX_PROG_CURRENT){
 		emergencyCutPower(false);
-		return;
+		//return;
 	}
+	setOutputsFromInterrupt(&mainTrackState);
 	setOutputsFromInterrupt(&progTrackState);
+	
+	updateNextOutput(&mainTrackState);
+	updateNextOutput(&progTrackState);
 	
 }
 

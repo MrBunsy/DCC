@@ -114,7 +114,7 @@ typedef struct {
 
 typedef struct{
 	bool success;
-	uint8_t cv;
+	uint8_t cvValue;
 }cvReadResponse_t;
 
 typedef struct{

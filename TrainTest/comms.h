@@ -39,7 +39,9 @@ typedef enum {
 	RESPONSE_COMMS_ERROR,
 	//current current draw measured from ADC
 	REPONSE_CURRENT,
-	RESPONSE_VERIFY,
+	RESPONSE_CV_READ,
+	RESPONSE_CV_BIT_VERIFY,
+	RESPONSE_CV_BYTE_VERIFY,
 } commandType_t;
 
 typedef enum{
@@ -81,7 +83,8 @@ typedef struct{
 }shiftRegisterLengthMessageData_t;
 
 typedef struct{
-	uint8_t responseType;
+	//uint8_t responseType;
+	uint16_t cv;
 	uint8_t cvValue;
 	uint16_t callback;
 	uint16_t callbackSub;
@@ -117,7 +120,7 @@ typedef struct{
 	uint16_t cv;
 	uint16_t callback;
 	uint16_t callbackSub;
-	//at end so this message can be used by both read and write
+	//at end so this message can be used by both requests for read and write
 	uint8_t newValue;
 } directByteCVMessageData_t;
 

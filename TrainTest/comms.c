@@ -182,15 +182,16 @@ void transmitCurrentDraw(uint8_t current){
 	transmitMessage((uint8_t*)&message);
 }
 
-void transmitReadResult(uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success, cvResponseType_t responseType){
+void transmitReadResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success, uint8_t responseType){
 	message_t message;
 	
-	message.commandType=RESPONSE_VERIFY;
+	message.commandType= responseType;
 	message.data.cvResponseData.cvValue=cvValue;
 	message.data.cvResponseData.callback=callback;
 	message.data.cvResponseData.callbackSub=callbackSub;
 	message.data.cvResponseData.success = success;
-	message.data.cvResponseData.responseType = responseType;
+	message.data.cvResponseData.cv=cv;
+	//message.data.cvResponseData.responseType = responseType;
 	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);
@@ -252,12 +253,12 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		 cvResponse = setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
-		transmitReadResult( cvResponse.cv, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, WRITE_BYTE_PROG_TRACK);
+		cvResponse = setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		transmitReadResult(message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, RESPONSE_CV_BYTE_VERIFY);
 		break;
 		case COMMAND_READ_CV:
 		cvResponse = readCVWithDirectMode(&progTrackState,message->data.directByteCVMessageData.cv);
-		transmitReadResult( cvResponse.cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success, READ_PROG_TRACK);
+		transmitReadResult( message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success,RESPONSE_CV_READ);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(&progTrackState,message->data.newAddressMessageData.newAddress);
@@ -287,13 +288,13 @@ void processMessage(message_t* message){
 		/*case COMMAND_SET_SPEED:
 		waitForSafeToInsert();
 		for (i = 0; i < DUPLICATION; i++) {
-			insertSpeedPacket(message->data.speedMessageData.address, message->data.speedMessageData.speed, message->data.speedMessageData.forwards, SPEEDMODE_128STEP);
+		insertSpeedPacket(message->data.speedMessageData.address, message->data.speedMessageData.speed, message->data.speedMessageData.forwards, SPEEDMODE_128STEP);
 		}
 		break;
 		case COMMAND_ENABLE_LIGHTS:
 		waitForSafeToInsert();
 		for (i = 0; i < DUPLICATION; i++) {
-			insertLightsPacket(message->data.lightsMessageData.address, message->data.lightsMessageData.on);
+		insertLightsPacket(message->data.lightsMessageData.address, message->data.lightsMessageData.on);
 		}
 		break;
 		case COMMAND_EMERGENCY_STOP:
@@ -323,14 +324,14 @@ void processMessage(message_t* message){
 		case COMMAND_SHIFT_REGISTER_DATA:
 		//this is data that will be sent out over SPI for the LED drivers/point motors
 		//once all the data has been collected it will be shifted out and a latch pin raised
-			setShiftRegisterData(message->data.shiftRegisterData.startByte,message->data.shiftRegisterData.data);
+		setShiftRegisterData(message->data.shiftRegisterData.startByte,message->data.shiftRegisterData.data);
 		
 		break;
 		case COMMAND_SET_SHIFT_REGISTER_LENGTH:
-			resetShiftRegister(message->data.shiftRegisterLengthData.length);
+		resetShiftRegister(message->data.shiftRegisterLengthData.length);
 		break;
 		case COMMAND_OUTPUT_SHIFT_REGISTER:
-			outputShiftRegister();
+		outputShiftRegister();
 		break;
 		default:
 		transmitCommsDebug(2);
