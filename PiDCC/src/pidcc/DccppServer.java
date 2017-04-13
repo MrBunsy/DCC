@@ -718,8 +718,8 @@ public class DccppServer extends SocketCommsServer {
              * *** READ CONFIGURATION VARIABLE BYTE FROM ENGINE DECODER ON
              * PROGRAMMING TRACK ***
              */
-            case 'R':     // <R CV CALLBACKNUM CALLBACKSUB>
-                /*    
+            case 'R': // <R CV CALLBACKNUM CALLBACKSUB>
+            /*    
                  *    reads a Configuration Variable from the decoder of an engine on the programming track
                  *    
                  *    CV: the number of the Configuration Variable memory location in the decoder to read from (1-1024)
@@ -728,16 +728,15 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <r CALLBACKNUM|CALLBACKSUB|CV VALUE)
                  *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if read could not be verified
-                 */
-                {
+             */ {
                 int cv = Integer.parseInt(splitCommand[1]);
                 int callback = Integer.parseInt(splitCommand[2]);
                 int callbacksub = Integer.parseInt(splitCommand[3]);
                 transmitMessageNow(SimpleDCCPacket.readCVDirectByte(cv, callback, callbacksub));
                 //the AVR should respond, and that will be processed in the UART read thread
                 //TODO a proper timeout system?
-                }
-                break;
+            }
+            break;
 
             /**
              * *** TURN ON POWER FROM MOTOR SHIELD TO TRACKS ***
@@ -1037,19 +1036,19 @@ public class DccppServer extends SocketCommsServer {
                 int errorType = 0xff & message[1];
                 Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Comms error from AVR type: {0}", errorType);
                 break;
-            case SimpleDCCPacket.RESPONSE_CV:
-                switch(message[1]&0xff){
-                    case SimpleDCCPacket.CV_READ_PROG_TRACK:
-                    {
-                        int cvValue = message[2];
-                        int callBackNum = (message[3]&0xff) | ((message[4] & 0xff)<<8);
-                        int callBackSub = (message[5]&0xff) | ((message[6] & 0xff)<<8);
-                        //<r CALLBACKNUM|CALLBACKSUB|CV VALUE>
-                        returnString("<r "+callBackNum+"|"+callBackSub+"|"+cvValue+">");
-                    }
-                        break;
-                }
-                break;
+            case SimpleDCCPacket.RESPONSE_CV_READ: {
+                int cv = (message[1] & 0xff) | ((message[2] & 0xff) << 8);
+                int cvValue = message[3] & 0xff;
+                int callBackNum = (message[4] & 0xff) | ((message[5] & 0xff) << 8);
+                int callBackSub = (message[6] & 0xff) | ((message[7] & 0xff) << 8);
+                //TODO, going to have to track callbacks or edit the messaging :(
+
+                //<r CALLBACKNUM|CALLBACKSUB|CV VALUE>
+                //seems to need no space between the r and callback?
+                returnString("<r" + callBackNum + "|" + callBackSub + "|" + cv + " " + cvValue + ">");
+
+            }
+            break;
 //            case SimpleDCCPacket.RESPONSE_CURRENT:
 //                int currentDraw = 0xff & message[1];
 //                //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left

@@ -32,7 +32,9 @@ public class SimpleDCCPacket {
     public final static int RESPONSE_PACKET_BUFFER_SIZE = 100,
             RESPONSE_COMMS_ERROR = 101,
             RESPONSE_CURRENT = 102,
-            RESPONSE_CV = 103;
+            RESPONSE_CV_READ = 103,
+            RESPONSE_CV_BIT_VERIFY = 104,
+            RESPONSE_CV_BYTE_VERIFY = 105;
 
     public final static int CV_READ_PROG_TRACK = 0,
             CV_WRITE_BYTE_PROG_TRACK = 1,
