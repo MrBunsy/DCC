@@ -163,6 +163,7 @@ typedef struct {
 
 
 void transmitMessage(uint8_t* messagePointer);
+void transmitReadResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success);
 void transmitPacketBufferSize(uint8_t size, uint8_t* current);
 message_t readMessage(void);
 void processInput(void);

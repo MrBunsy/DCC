@@ -182,10 +182,11 @@ void transmitCurrentDraw(uint8_t current){
 	transmitMessage((uint8_t*)&message);
 }
 
-void transmitReadResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success, uint8_t responseType){
+void transmitReadResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success){//, uint8_t responseType
 	message_t message;
-	
-	message.commandType= responseType;
+	//TODO
+	message.commandType=RESPONSE_CV_READ;
+	//message.commandType= responseType;
 	message.data.cvResponseData.cvValue=cvValue;
 	message.data.cvResponseData.callback=callback;
 	message.data.cvResponseData.callbackSub=callbackSub;
@@ -210,7 +211,7 @@ void transmitMessage(uint8_t* messagePointer){
 	
 	//send the message
 	//data + command + crc
-	for (uint8_t i = 0; i<MAX_MESSAGE_DATA_BYTES+2; i++) {
+	for (uint8_t i = 0; i<MAX_MESSAGE_DATA_BYTES+2; i++) {//two extra bytes for command type and CRC
 		uart_putc(*messagePointer);
 		messagePointer++;
 	}
@@ -229,7 +230,7 @@ uint8_t calculateCRC(message_t* message){
 	
 	uint8_t crc = 0;
 	//data + command
-	for(uint8_t i=0;i<MAX_MESSAGE_DATA_BYTES+1;i++){
+	for(uint8_t i=0;i<MAX_MESSAGE_DATA_BYTES+1;i++){//one extra byte for the command type
 		
 		crc = _crc_ibutton_update(crc,messagePtr[i]);
 	}
@@ -239,7 +240,7 @@ uint8_t calculateCRC(message_t* message){
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
-	cvReadResponse_t cvResponse;
+	//cvReadResponse_t cvResponse;
 	//USART_Transmit('r');
 	
 	if(!checkCRC(message)){
@@ -253,12 +254,14 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		cvResponse = setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
-		transmitReadResult(message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, RESPONSE_CV_BYTE_VERIFY);
+		//cvResponse = 
+		setCVwithDirectMode(&progTrackState, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		//transmitReadResult(message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, RESPONSE_CV_BYTE_VERIFY);
 		break;
 		case COMMAND_READ_CV:
-		cvResponse = readCVWithDirectMode(&progTrackState,message->data.directByteCVMessageData.cv);
-		transmitReadResult( message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success,RESPONSE_CV_READ);
+		//cvResponse = 
+		readCVWithDirectMode(&progTrackState,message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.callback, message->data.directByteCVMessageData.callbackSub);
+		//transmitReadResult( message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success,RESPONSE_CV_READ);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(&progTrackState,message->data.newAddressMessageData.newAddress);

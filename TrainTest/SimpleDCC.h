@@ -9,11 +9,18 @@
 #ifndef TRAINTEST_H_
 #define TRAINTEST_H_
 
-
+/*
+While the baseline packet has a length of 3 data bytes separated by a "0" bit, a packet using the extended
+packet format definition may have a length of between 3 and 6 data bytes each separated by a "0" bit.
+- RP-9.2.1 DCC Extended Packet Format
+(I think address counts as a packet)
+*/
+#define MAX_DATA_BYTES_IN_DCC_PACKET (5) //TODO - this is above including comms.h becaues comms relies on it. simpleDCC should not really rely on comms, FIX THIS
 
 #include "Include.h"
 #include "uart.h"
 #include "ADC.h"
+#include "comms.h"
 
 #if (PROCESSOR == ATMEGA644)
 //port registers for the DCC pins
@@ -74,13 +81,7 @@
 //not enough RAM!
 #define PACKET_BUFFER_SIZE (100)
 #endif
-/*
-While the baseline packet has a length of 3 data bytes separated by a "0" bit, a packet using the extended
-packet format definition may have a length of between 3 and 6 data bytes each separated by a "0" bit.
-- RP-9.2.1 DCC Extended Packet Format
-(I think address counts as a packet)
-*/
-#define MAX_DATA_BYTES_IN_DCC_PACKET (5)
+
 
 //minimum of 14 (though one can be last 1 of previous packet)
 #define PREAMBLE_LENGTH (16)
@@ -94,7 +95,39 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 #define DC_DELAY (1000)
 
 
+typedef enum baseStates {
+	OPERATIONS_MODE,
+	SERVICE_MODE,
+	ENTER_SERVICE_MODE,
+	LEAVE_SERVICE_MODE,
+	OFF
+} baseStates_t;
 
+typedef enum serviceModeStates{
+	READ_BYTE_SETUP,
+	READ_BYTE_READ_BIT,
+	
+}serviceModeStates_t;
+
+enum speedModes {
+	SPEEDMODE_14STEP,
+	SPEEDMODE_28STEP,
+	SPEEDMODE_128STEP
+};
+
+typedef struct{
+	volatile serviceModeStates_t state;
+	volatile bool inUse;
+	volatile uint8_t baseCurrent;
+	//this is adjusted so it's 0-1023, rather than 1-1024, no need to subtract one again
+	uint16_t CVBeingProcessed;
+	volatile uint8_t bitBeingProcessed;
+	volatile uint8_t cvValue;
+	
+	uint16_t callback;
+	uint16_t callbacksub;
+	
+}serviceModeInfo_t;
 
 
 //true if too much current has been drawn
@@ -120,7 +153,7 @@ typedef struct{
 typedef struct{
 	//at the packet level, what is happening? EG running, entering service mode (baseStates_t)
 	//TODO eventually scrap this, now that programming track and main ops are seperate tehre should be no need for it.
-	volatile uint8_t operatingState;
+	volatile baseStates_t operatingState;
 	
 	dccPacket_t* packetBuffer;
 	
@@ -148,6 +181,7 @@ typedef struct{
 	
 	//which pin in DCC_PORT to toggle?
 	uint8_t outputPin;
+	
 }dccTransmitionState_t;
 
 extern dccTransmitionState_t mainTrackState;
@@ -160,9 +194,10 @@ void insertSpeedPacket(dccTransmitionState_t* state, uint8_t address, uint8_t sp
 void insertLightsPacket(dccTransmitionState_t* state, uint8_t address, bool on);
 void insertResetPacket(dccTransmitionState_t* state, bool longPreamble);
 dccPacket_t *getInsertPacketPointer(dccTransmitionState_t* state);
+//dccPacket_t *getInsertPacketPointerNoBlock(dccTransmitionState_t* state);
 uint8_t getPacketsInBuffer(dccTransmitionState_t* state);
-cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue);
-cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv);
+void setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue);
+void readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint16_t callback, uint16_t callbacksub);
 void waitForSafeToInsert(dccTransmitionState_t* state);
 void emergencyCutPower(bool mainTrack);
 
@@ -186,19 +221,6 @@ void setMainTrackPower(bool power);
 
 
 
-typedef enum baseStates {
-	OPERATIONS_MODE,
-	SERVICE_MODE,
-	ENTER_SERVICE_MODE,
-	LEAVE_SERVICE_MODE,
-	OFF
-} baseStates_t;
-
-enum speedModes {
-	SPEEDMODE_14STEP,
-	SPEEDMODE_28STEP,
-	SPEEDMODE_128STEP
-};
 
 
 #endif /* TRAINTEST_H_ */

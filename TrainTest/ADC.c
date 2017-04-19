@@ -13,6 +13,8 @@ volatile bool readingMainTrack = true;
 volatile uint8_t mainTrackCurrent = 0;
 volatile uint8_t progTrackCurrent = 0;
 volatile bool progTrackCurrentUpdated = false;
+volatile uint8_t progTrackCurrentBufferPos = 0;
+volatile uint8_t progTrackCurrentBuffer[PROG_TRACK_CURRENT_BUFFER_SIZE];
 
 void adc_init(){
 	/*
@@ -79,10 +81,20 @@ uint8_t adc_read(){
 /************************************************************************/
 /* block until a new prog track current read is in, then return it      */
 /************************************************************************/
-uint8_t getProgTrackValue(){
+/*uint8_t getProgTrackValue(){
 	while(!progTrackCurrentUpdated);
 	progTrackCurrentUpdated = false;
 	return progTrackCurrent;
+}*/
+
+uint8_t getAvgProgTrackCurrent(void){
+	uint16_t baseCurrent = 0;
+	for(uint8_t j = 0;j<PROG_TRACK_CURRENT_BUFFER_SIZE;j++){
+		baseCurrent+=progTrackCurrentBuffer[j];
+	}
+	baseCurrent/=PROG_TRACK_CURRENT_BUFFER_SIZE;
+	
+	return (uint8_t)baseCurrent;
 }
 
 ISR(ADC_vect)
@@ -95,7 +107,10 @@ ISR(ADC_vect)
 		progTrackCurrent = ADCH;
 		adc_input_set(CURRENT_SENSE_MAIN_TRACK);
 		//for any other 'thread' waiting for a new value
-		progTrackCurrentUpdated = true;
+		//progTrackCurrentUpdated = true;
+		progTrackCurrentBuffer[progTrackCurrentBufferPos]=progTrackCurrent;
+		progTrackCurrentBufferPos++;
+		progTrackCurrentBufferPos%=PROG_TRACK_CURRENT_BUFFER_SIZE;
 		readingMainTrack = true;
 	}
 	

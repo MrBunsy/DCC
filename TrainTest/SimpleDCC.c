@@ -11,7 +11,7 @@
 
 //buffer to hold packets info to be sent
 dccPacket_t mainTrackPacketBuffer[PACKET_BUFFER_SIZE];
-dccPacket_t programmingPacketBuffer[PACKET_BUFFER_SIZE];
+dccPacket_t programmingPacketBuffer[PACKET_BUFFER_SIZE/2];
 
 dccTransmitionState_t mainTrackState;
 dccTransmitionState_t progTrackState;
@@ -64,7 +64,17 @@ enum bitStates {
 * blocks if packet buffer is full
 */
 dccPacket_t *getInsertPacketPointer(dccTransmitionState_t* state) {
-	while (state->packetsInBuffer == PACKET_BUFFER_SIZE);
+	//taking out the wait, as I think in general it's better to overwrite stuff in the buffer than block when not expected
+	//while (state->packetsInBuffer == PACKET_BUFFER_SIZE);
+	dccPacket_t* p = &(state->packetBuffer[(state->transmittingPacket + state->packetsInBuffer) % PACKET_BUFFER_SIZE]);
+	state->packetsInBuffer++;
+	return p;
+}
+
+/************************************************************************/
+/* same as getInsertPacketPointer but garenteed to not block            */
+/************************************************************************/
+dccPacket_t *getInsertPacketPointerNoBlock(dccTransmitionState_t* state){
 	dccPacket_t* p = &(state->packetBuffer[(state->transmittingPacket + state->packetsInBuffer) % PACKET_BUFFER_SIZE]);
 	state->packetsInBuffer++;
 	return p;
@@ -222,13 +232,17 @@ void setMainTrackPower(bool power){
 	}
 }
 
+//some globals used when reading/writing to decoders
+serviceModeInfo_t serviceModeInfo;
+
 /************************************************************************/
 /* turn the programming track on and insert start-service-mode packets  */
 /************************************************************************/
 void enterServiceMode(dccTransmitionState_t * state){
 	
 	
-	
+	//to stop more than one service mode action occuring at once (if we received a message to start somethign else before this has finished)
+	serviceModeInfo.inUse=true;
 	uint8_t i;
 	waitForSafeToInsert(state);
 	//turn the track on
@@ -248,33 +262,56 @@ void enterServiceMode(dccTransmitionState_t * state){
 }
 /*
 void leaveServiceMode(){
-	operatingState=OPERATIONS_MODE;
+operatingState=OPERATIONS_MODE;
 }
 
 bool isInServiceMode(){
-	return operatingState==SERVICE_MODE;
+return operatingState==SERVICE_MODE;
 }*/
 
 /************************************************************************/
 /* take lots of samples of the current and average them. Blocking       */
 /************************************************************************/
-uint8_t getAvgCurrent(){
-	uint16_t j;
-	uint16_t baseCurrent = 0;
-	for(j = 0;j<ACK_BASE_COUNT;j++){
-		baseCurrent+=getProgTrackValue();
+/*uint8_t getAvgCurrent(){
+uint16_t j;
+uint16_t baseCurrent = 0;
+for(j = 0;j<PROG_TRACK_CURRENT_BUFFER_SIZE;j++){
+baseCurrent+=getProgTrackValue();
+}
+baseCurrent/=ACK_BASE_COUNT;
+
+return (uint8_t)baseCurrent;
+}*/
+
+/************************************************************************/
+/* Send the packets to trigger a response from the decoder for reading a single bit in direct mode  */
+/************************************************************************/
+void insertReadBitUsingDirectModePackets(dccTransmitionState_t* state, uint16_t cv, uint8_t bit){
+	uint8_t j;
+	for(j =0;j<3;j++){
+		insertResetPacket(state,true);
 	}
-	baseCurrent/=ACK_BASE_COUNT;
+	dccPacket_t *packet;
+	for (j = 0; j < 8; j++) {
+		packet = getInsertPacketPointer(state);
+		packet->address = 0x78 | ((cv >> 8) & 0b11); //read CV, with the 2 MSB of CV number
+		packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+		packet->data[1] = 0xE8+bit;//which bit to read
+		packet->dataBytes = 2;
+		packet->longPreamble = true;
+	}
 	
-	return (uint8_t)baseCurrent;
+	for(j=0;j<1;j++){
+		insertResetPacket(state,true);
+	}
 }
 
-cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv){
+void readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint16_t callback, uint16_t callbacksub){
 	
 
-	cvReadResponse_t response;
+	//cvReadResponse_t response;
 	
-	response.cvValue = 0;
+	//response.cvValue = 0;
 	/*state->operatingState=OPERATIONS_MODE;
 	setProgTrackPower(true);
 	intialiseDCC(state);
@@ -284,51 +321,72 @@ cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv)
 	return response;*/
 	
 	cv--;
-		
-	dccPacket_t *packet;
-	uint8_t i,j;
-	uint8_t cvValue = 0;
-	uint8_t baseCurrents[8];
-	volatile uint8_t currents[8];
+	
+	//dccPacket_t *packet;
+	//uint8_t i,j;
+	//uint8_t cvValue = 0;
+	//uint8_t baseCurrents[8];
+	//volatile uint8_t currents[8];
+	
+	serviceModeInfo.CVBeingProcessed=cv;
+	serviceModeInfo.bitBeingProcessed=0;
+	serviceModeInfo.cvValue=0;
+	
+	serviceModeInfo.callback=callback;
+	serviceModeInfo.callbacksub=callbacksub;
 	
 	enterServiceMode(state);
-	
-	uint8_t baseCurrent = getAvgCurrent();
+	serviceModeInfo.state=READ_BYTE_SETUP;
+	/*
+
+	//uint8_t baseCurrent = getAvgProgTrackCurrent();
 	
 	for(i=0;i<8;i++){
-		for(j=0;j<3;j++){
-			insertResetPacket(state,true);
-		}
-		for (j = 0; j < 8; j++) {
-			packet = getInsertPacketPointer(state);
-			packet->address = 0x78 | ((cv >> 8) & 0b11); //read CV, with the 2 MSB of CV number
-			packet->data[0] = cv & 0xff; //lowest 8 bits of cv
-			packet->data[1] = 0xE8+i;//which bit to read
-			packet->dataBytes = 2;
-			packet->longPreamble = true;
-		}
-		
-		for(j=0;j<1;j++){
-			insertResetPacket(state,true);
-		}
-		while(getPacketsInBuffer(state) > 2);
-		
-		uint8_t current = getAvgCurrent();
-		
-		if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
-			//Setb(response.cv,i);
-			cvValue |= 1<<i;
-		}
-		currents[i]=current;
-		baseCurrents[i] = baseCurrent;
+	
+	while(getPacketsInBuffer(state) > 10);
+	
+	uint8_t current = getAvgProgTrackCurrent();
+	
+	if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+	//Setb(response.cv,i);
+	cvValue |= 1<<i;
+	}
+	currents[i]=current;
+	//baseCurrents[i] = baseCurrent;
 	}
 	
 	response.cvValue=cvValue;
-	state->operatingState = LEAVE_SERVICE_MODE;
-	return response;
+	//state->operatingState = LEAVE_SERVICE_MODE;
+	return response;*/
 }
 
-
+void setupReadCVBit(dccTransmitionState_t* state){
+	
+	
+	if(serviceModeInfo.bitBeingProcessed > 0){
+		//the current should read to tell what the last bit was
+		uint8_t current = getAvgProgTrackCurrent();
+		if(current > serviceModeInfo.baseCurrent && current - serviceModeInfo.baseCurrent > ACK_SAMPLE_THRESHOLD){
+			serviceModeInfo.cvValue |= 1 << (serviceModeInfo.bitBeingProcessed-1);
+		}
+	}
+	if(serviceModeInfo.bitBeingProcessed <8){
+		//keep on reading, still more to collect
+		serviceModeInfo.state = READ_BYTE_READ_BIT;
+		}else{
+		//now finished reading, time to stop
+		state->operatingState=LEAVE_SERVICE_MODE;
+		insertResetPacket(state,true);
+		//TODO probably shouldn't be transmitting in this 'thread'
+		transmitReadResult(serviceModeInfo.CVBeingProcessed,serviceModeInfo.cvValue,serviceModeInfo.callback,serviceModeInfo.callbacksub,true);
+		return;
+	}
+	
+	insertReadBitUsingDirectModePackets(state,serviceModeInfo.CVBeingProcessed,serviceModeInfo.bitBeingProcessed);
+	
+	serviceModeInfo.bitBeingProcessed++;
+	
+}
 
 /*
 * direct mode service mode to set the address CV
@@ -337,7 +395,7 @@ cvReadResponse_t readCVWithDirectMode(dccTransmitionState_t* state, uint16_t cv)
 *
 * cv is 10bits
 */
-cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue) {
+void setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, uint8_t newValue) {
 	/*_delay_ms(500);
 	setDataLED();
 	_delay_ms(500);
@@ -355,7 +413,7 @@ cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, 
 
 	//at least three reset packets with long preamble
 	for (i = 0; i < 10; i++) {//formerlly 5
-		insertResetPacket(state, true);
+	insertResetPacket(state, true);
 	}*/
 	enterServiceMode(state);
 
@@ -383,7 +441,7 @@ cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, 
 		insertResetPacket(state, true);
 	}
 	//largely copied from DCC++ PacketRegister.cpp
-	uint8_t baseCurrent = getAvgCurrent();
+	uint8_t baseCurrent = getAvgProgTrackCurrent();
 	
 	//TODO get base level of current reading before this, then request verification and wait until x many packets left in buffer before reading current again!
 	
@@ -415,7 +473,7 @@ cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, 
 	
 	//block until we've transmitted 4 of the verify packets
 	while(getPacketsInBuffer(state) > 3);
-	uint8_t current = getAvgCurrent();
+	uint8_t current = getAvgProgTrackCurrent();
 	
 	//a bit of a hack that will result in the power to the track being cut off briefly:
 	state->operatingState = LEAVE_SERVICE_MODE;
@@ -429,7 +487,7 @@ cvReadResponse_t setCVwithDirectMode(dccTransmitionState_t* state, uint16_t cv, 
 	}
 	
 	
-	return response;
+	//return response;
 }
 
 /*
@@ -444,7 +502,7 @@ bool setAddress(dccTransmitionState_t* state,  uint8_t newAddress) {
 	
 	//3 or more Reset Packets
 	for (i = 0; i < 5; i++) {
-		insertResetPacket(state, true);
+	insertResetPacket(state, true);
 	}*/
 	enterServiceMode(state);
 	
@@ -723,8 +781,19 @@ void fillPacketBuffer(dccTransmitionState_t* state) {
 		clearServiceLED();
 		break;
 		case SERVICE_MODE:
-		//I don't think this will occur, as generally we queue up a load of service mode commands and then set state to LEAVE_SERVICE_MODE, so once they're all executed we drop straight out
-		insertResetPacket(state, true);
+		//insertResetPacket(state, true);
+		//note, been lazy about re-assigning state inside the switch statement, so don't re-adjust order without being careful - or does this not matter in c?
+		switch(serviceModeInfo.state){
+			case READ_BYTE_READ_BIT:
+			setupReadCVBit(state);
+			break;
+			case READ_BYTE_SETUP:
+			//finished running through the packets to get the decoder into service mode, now we should request stuff
+			//record what the base current was while stuff had been going on TODO calculate actually how long the setup takes and how long the avg current is calculated over
+			serviceModeInfo.baseCurrent = getAvgProgTrackCurrent();
+			setupReadCVBit(state);
+			break;
+		}
 		break;
 	}
 }
@@ -868,9 +937,9 @@ uint8_t determineNextBit(dccTransmitionState_t* state) {
 			//detect what the next packet type is and set LED accordingly
 			if (state->packetBuffer[state->transmittingPacket].longPreamble || state->serviceModeOnly) {
 				//TODO improve this logic so the service mode LED is only on when we're actually doing something in service mode
-					if(state->operatingState!=OFF){
-						setServiceLED();
-					}
+				if(state->operatingState!=OFF){
+					setServiceLED();
+				}
 				} else if (state->packetBuffer[state->transmittingPacket].address == 0xff) {
 				//idle packet
 				setIdleLED();
@@ -892,7 +961,7 @@ uint8_t determineNextBit(dccTransmitionState_t* state) {
 void emergencyCutPower(bool mainTrack){
 	if(mainTrack){
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-	}else{
+		}else{
 		//programming track
 		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
 	}
@@ -909,13 +978,13 @@ inline void setOutputsFromInterrupt(dccTransmitionState_t* state){
 		case ONE_HIGH:
 		case ZERO_HIGH1:
 		case ZERO_HIGH2:
-			Setb(DCC_PORT, state->outputPin);
-			break;
+		Setb(DCC_PORT, state->outputPin);
+		break;
 		case ONE_LOW:
 		case ZERO_LOW1:
 		case ZERO_LOW2:
-			Clrb(DCC_PORT, state->outputPin);
-			break;
+		Clrb(DCC_PORT, state->outputPin);
+		break;
 	}
 	
 }
