@@ -1,9 +1,9 @@
 /*
- * ADC.c
- *
- * Created: 20/03/2017 19:33:04
- *  Author: Luke
- */ 
+* ADC.c
+*
+* Created: 20/03/2017 19:33:04
+*  Author: Luke
+*/
 
 #include "ADC.h"
 #include "stdio.h"
@@ -12,6 +12,9 @@
 volatile bool readingMainTrack = true;
 volatile uint8_t mainTrackCurrent = 0;
 volatile uint8_t progTrackCurrent = 0;
+volatile bool progTrackCurrentUpdated = false;
+volatile uint8_t progTrackCurrentBufferPos = 0;
+volatile uint8_t progTrackCurrentBuffer[PROG_TRACK_CURRENT_BUFFER_SIZE];
 
 void adc_init(){
 	/*
@@ -43,11 +46,12 @@ void adc_init(){
 	
 	//set which single ended input to use
 	//value = (value & ~mask) | (newvalue & mask);
-	 // 0001 1111
+	// 0001 1111
 	//this is just setting the last 5 bits to the value of the adc input pin
 	//ADMUX = (ADMUX & ~ADC_INPUT_MASK) | (CURRENT_SENSE_MAIN_TRACK & ADC_INPUT_MASK);
 	adc_input_set(CURRENT_SENSE_MAIN_TRACK);
 	readingMainTrack = true;
+	progTrackCurrentUpdated = false;
 	
 	//The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC) must be written to '0' in order to be enable the ADC.
 	Clrb(PRR0, PRADC);
@@ -74,7 +78,24 @@ uint8_t adc_read(){
 	return ADCH;
 }
 
+/************************************************************************/
+/* block until a new prog track current read is in, then return it      */
+/************************************************************************/
+/*uint8_t getProgTrackValue(){
+	while(!progTrackCurrentUpdated);
+	progTrackCurrentUpdated = false;
+	return progTrackCurrent;
+}*/
 
+uint8_t getAvgProgTrackCurrent(void){
+	uint16_t baseCurrent = 0;
+	for(uint8_t j = 0;j<PROG_TRACK_CURRENT_BUFFER_SIZE;j++){
+		baseCurrent+=progTrackCurrentBuffer[j];
+	}
+	baseCurrent/=PROG_TRACK_CURRENT_BUFFER_SIZE;
+	
+	return (uint8_t)baseCurrent;
+}
 
 ISR(ADC_vect)
 {
@@ -82,9 +103,14 @@ ISR(ADC_vect)
 		mainTrackCurrent = ADCH;
 		adc_input_set(CURRENT_SENSE_PROG_TRACK);
 		readingMainTrack = false;
-	}else{
+		}else{
 		progTrackCurrent = ADCH;
 		adc_input_set(CURRENT_SENSE_MAIN_TRACK);
+		//for any other 'thread' waiting for a new value
+		//progTrackCurrentUpdated = true;
+		progTrackCurrentBuffer[progTrackCurrentBufferPos]=progTrackCurrent;
+		progTrackCurrentBufferPos++;
+		progTrackCurrentBufferPos%=PROG_TRACK_CURRENT_BUFFER_SIZE;
 		readingMainTrack = true;
 	}
 	
