@@ -738,15 +738,12 @@ uint8_t determineNextBit() {
 
 }
 /************************************************************************/
-/* cut all high power outputs in a hurry                                */
+/* cut all high power outputs in a hurry and light overcurrent LED      */
 /************************************************************************/
-void emergencyCutPower(bool mainTrack){
-	if(mainTrack){
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-	}else{
-		//programming track
-		Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
-	}
+void emergencyCutPower(){
+	Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+	Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+	//also set the overcurrent LED
 	Setb(LED_PORT, LED_OVERCURRENT);
 }
 
@@ -758,15 +755,8 @@ uint16_t debugledFlash = 0;
 /* Interrupt which is run every 58us                                    */
 /************************************************************************/
 ISR(TIMER0_COMPA_vect) {
-	if(progTrackCurrent > MAX_PROG_CURRENT){
-		emergencyCutPower(false);
-		//don't return, in case main track is also overcurrented
-	}
-	
-	
-	//uint8_t temp = ADCH;
-	if (mainTrackCurrent > MAX_CURRENT){
-		emergencyCutPower(true);
+	if(progTrackCurrent > MAX_PROG_CURRENT || mainTrackCurrent > MAX_CURRENT){
+		emergencyCutPower();
 		return;
 	}
 	

@@ -122,7 +122,7 @@ dccPacket_t *getInsertPacketPointer();
 uint8_t getPacketsInBuffer();
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
 void waitForSafeToInsert();
-void emergencyCutPower(bool mainTrack);
+void emergencyCutPower();
 
 bool isInServiceMode();
 void leaveServiceMode();
