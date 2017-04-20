@@ -93,6 +93,7 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 //if running DC test, how long between switching modes
 #define DC_DELAY (1000)
 
+#define  ACK_SAMPLE_THRESHOLD       (4)
 
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;
@@ -121,6 +122,7 @@ void insertResetPacket(bool longPreamble);
 dccPacket_t *getInsertPacketPointer();
 uint8_t getPacketsInBuffer();
 bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
+uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksub);
 void waitForSafeToInsert();
 void emergencyCutPower();
 
@@ -134,6 +136,8 @@ void setIdleLED();
 
 void setProgTrackPower(bool power);
 void setMainTrackPower(bool power);
+
+void intialiseDCC();
 
 //not sure if this is oging to be needed - might simply pop into service mode and leave as soon as whatever action was completed
 //service mode is going to need overhauling with dccpp I think

@@ -8,7 +8,7 @@
 #include "SimpleDCC.h"
 
 //at the packet level, what is happening? EG running, entering service mode (baseStates_t)
-volatile uint8_t operatingState;
+volatile baseStates_t operatingState;
 
 //buffer to hold packets info to be sent
 dccPacket_t packetBuffer[PACKET_BUFFER_SIZE];
@@ -64,6 +64,8 @@ enum bitStates {
 };
 
 volatile uint8_t bitState;
+//serviec mode or operations mode output pin
+volatile uint8_t currentlyOperatingOutput;
 
 /*
 * Get a pointer to a position in the packet buffer where we can add a packet.  Also increment packetsInBuffer.
@@ -170,10 +172,26 @@ void simpleDCC_init() {
 	
 	
 	operatingState = OPERATIONS_MODE;
+	currentlyOperatingOutput = DCC_MAIN_TRACK_OUT;
 	transmittingPacket = 0;
 	packetsInBuffer = 0;
 	highCurrentDrawMainTrack = false;
 	
+	intialiseDCC();
+	
+	//setCVwithDirectMode(1,6);
+}
+
+/************************************************************************/
+/* After powering on a track, perform the setup                         */
+/************************************************************************/
+void intialiseDCC(){
+	/*
+	In the case where there is no information about the previous state of the system, the Digital Command
+	Station shall send a minimum of twenty (20) digital decoder reset packets to the layout followed by a
+	minimum of ten (10) idle packets.
+	- RP-9.2.4 DCC Fail Safe
+	*/
 	int i;
 	for (i = 0; i < 20; i++) {
 		insertResetPacket(false);
@@ -187,8 +205,6 @@ void simpleDCC_init() {
 	for (i = 0; i < 20; i++) {
 		insertIdlePacket(false);
 	}
-	
-	//setCVwithDirectMode(1,6);
 }
 
 /************************************************************************/
@@ -213,18 +229,26 @@ void setMainTrackPower(bool power){
 }
 
 bool enterServiceMode(){
+	operatingState=SERVICE_MODE;
+	setMainTrackPower(false);
+	setProgTrackPower(true);
+	currentlyOperatingOutput = DCC_PROG_TRACK_OUT;
 	uint8_t i;
-	waitForSafeToInsert();
-	for (i = 0; i <5; i++) {
+	//this is now called in the get next bit part of the dcc thread, so no waiting involved
+	//waitForSafeToInsert();
+	intialiseDCC();
+	for (i = 0; i <5; i++) {//min 5
 		insertResetPacket(true);
 	}
-	operatingState=SERVICE_MODE;
 	return true;
 
 }
 
 void leaveServiceMode(){
 	operatingState=OPERATIONS_MODE;
+	currentlyOperatingOutput = DCC_MAIN_TRACK_OUT;
+	setProgTrackPower(false);
+	setMainTrackPower(true);
 }
 
 bool isInServiceMode(){
@@ -285,6 +309,57 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 	//a bit of a hack that will result in the power to the track being cut off briefly:
 	operatingState = LEAVE_SERVICE_MODE;
 	return true;
+}
+
+
+uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksub){
+	
+	cv--;
+	
+	dccPacket_t *packet;
+	uint8_t i,j;
+	uint8_t cvValue = 0;
+	//uint8_t baseCurrents[8];
+	//volatile uint8_t currents[8];
+	
+	operatingState=ENTER_SERVICE_MODE;
+	//wait till we've entered
+	while(operatingState!=SERVICE_MODE);
+	
+	uint8_t baseCurrent = getAvgProgTrackCurrent();
+	
+	//for each bit
+	for(i=0;i<8;i++){
+		for(j=0;j<3;j++){//min 3
+			insertResetPacket(true);
+		}
+		for (j = 0; j < 8; j++) {
+			packet = getInsertPacketPointer();
+			packet->address = 0x78 | ((cv >> 8) & 0b11); //read CV, with the 2 MSB of CV number
+			packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+			packet->data[1] = 0xE8+i;//which bit to read
+			packet->dataBytes = 2;
+			packet->longPreamble = true;
+		}
+		
+		for(j=0;j<2;j++){
+			insertResetPacket(true);
+		}
+		while(getPacketsInBuffer() > 2);
+		
+		uint8_t current = getAvgProgTrackCurrent();
+		
+		if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+			//Setb(response.cv,i);
+			cvValue |= 1<<i;
+		}
+		//currents[i]=current;
+		//baseCurrents[i] = baseCurrent;
+	}
+	//leave once the buffer has run out
+	operatingState = LEAVE_SERVICE_MODE;
+	return cvValue;
+	
 }
 
 /*
@@ -556,6 +631,10 @@ void setIdleLED() {
 */
 void fillPacketBuffer() {
 	switch (operatingState) {
+		case ENTER_SERVICE_MODE:
+		//switch the outputs to the service mode track and fill the packet buffer
+		enterServiceMode();
+		break;
 		case OPERATIONS_MODE:
 		//normal running mode, we just want to keep sending out idle packets
 		//TODO here is where more inteligent logic about which commands to prioritise can go
@@ -565,12 +644,13 @@ void fillPacketBuffer() {
 		case LEAVE_SERVICE_MODE:
 		// TODO remove this
 		//clear DCC output
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
+		//Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
+		//Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
+		leaveServiceMode();
 		//leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
 		//we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
-		setDataLED();
-		_delay_ms(500);
+		//setDataLED();
+		//_delay_ms(500);
 		operatingState = OPERATIONS_MODE;
 		//insertIdlePacket(false);
 		
@@ -759,33 +839,20 @@ ISR(TIMER0_COMPA_vect) {
 		emergencyCutPower();
 		return;
 	}
-	
-	
-	#ifdef DEBUG_LED_FLASH
-	debugledFlash++;
-	if(debugledFlash ==1){
-		Setb(LED_PORT, LED_SERVICE_MODE);
-		}else if(debugledFlash == 2000){
-		Clrb(LED_PORT, LED_SERVICE_MODE);
-		}else if(debugledFlash == 4000){
-		debugledFlash=0;
-	}
-	#endif
-	
 
 	//output the right bit
 	switch (bitState) {
 		case ONE_HIGH:
 		case ZERO_HIGH1:
 		case ZERO_HIGH2:
-		Setb(DCC_PORT, DCC_MAIN_TRACK_OUT);
+		Setb(DCC_PORT, currentlyOperatingOutput);
 		//Clrb(DCC_PORT, DCC_OUT_PIN);
 		break;
 		case ONE_LOW:
 		case ZERO_LOW1:
 		case ZERO_LOW2:
 		//Setb(DCC_OUT_PORT, DCC_OUT_PIN);
-		Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
+		Clrb(DCC_PORT, currentlyOperatingOutput);
 		break;
 	}
 	//proceed to output the rest of this bit, or work out what the next bit is

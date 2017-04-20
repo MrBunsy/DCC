@@ -181,6 +181,23 @@ void transmitCurrentDraw(uint8_t current){
 	
 	transmitMessage((uint8_t*)&message);
 }
+
+void transmitReadResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success){//, uint8_t responseType
+	message_t message;
+	//TODO
+	message.commandType=RESPONSE_CV_READ;
+	//message.commandType= responseType;
+	message.data.cvResponseData.cvValue=cvValue;
+	message.data.cvResponseData.callback=callback;
+	message.data.cvResponseData.callbackSub=callbackSub;
+	message.data.cvResponseData.success = success;
+	message.data.cvResponseData.cv=cv;
+	//message.data.cvResponseData.responseType = responseType;
+	message.crc = calculateCRC(&message);
+	
+	transmitMessage((uint8_t*)&message);
+}
+
 /************************************************************************/
 /* Transmit a message over UART                                         */
 /************************************************************************/
@@ -194,7 +211,7 @@ void transmitMessage(uint8_t* messagePointer){
 	
 	//send the message
 	//data + command + crc
-	for (uint8_t i = 0; i<MAX_MESSAGE_DATA_BYTES+2; i++) {
+	for (uint8_t i = 0; i<MAX_MESSAGE_DATA_BYTES+2; i++) {//two extra bytes for command type and CRC
 		uart_putc(*messagePointer);
 		messagePointer++;
 	}
@@ -213,7 +230,7 @@ uint8_t calculateCRC(message_t* message){
 	
 	uint8_t crc = 0;
 	//data + command
-	for(uint8_t i=0;i<MAX_MESSAGE_DATA_BYTES+1;i++){
+	for(uint8_t i=0;i<MAX_MESSAGE_DATA_BYTES+1;i++){//one extra byte for the command type
 		
 		crc = _crc_ibutton_update(crc,messagePtr[i]);
 	}
@@ -223,6 +240,8 @@ uint8_t calculateCRC(message_t* message){
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
+	uint8_t cv;
+	//cvReadResponse_t cvResponse;
 	//USART_Transmit('r');
 	
 	if(!checkCRC(message)){
@@ -236,7 +255,14 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		setCVwithDirectMode(message->data.programmeDirectByteMessageData.cv, message->data.programmeDirectByteMessageData.newValue);
+		//cvResponse = 
+		setCVwithDirectMode( message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		//transmitReadResult(message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, RESPONSE_CV_BYTE_VERIFY);
+		break;
+		case COMMAND_READ_CV:
+		//cvResponse = 
+		cv = readCVWithDirectMode(message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.callback, message->data.directByteCVMessageData.callbackSub);
+		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);//, RESPONSE_CV_READ);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(message->data.newAddressMessageData.newAddress);
@@ -263,27 +289,27 @@ void processMessage(message_t* message){
 			//insertSpeedPacket(message->address, 80, true, SPEEDMODE_128STEP);
 		}
 		break;
-		case COMMAND_SET_SPEED:
+		/*case COMMAND_SET_SPEED:
 		waitForSafeToInsert();
 		for (i = 0; i < DUPLICATION; i++) {
-			insertSpeedPacket(message->data.speedMessageData.address, message->data.speedMessageData.speed, message->data.speedMessageData.forwards, SPEEDMODE_128STEP);
+		insertSpeedPacket(message->data.speedMessageData.address, message->data.speedMessageData.speed, message->data.speedMessageData.forwards, SPEEDMODE_128STEP);
 		}
 		break;
 		case COMMAND_ENABLE_LIGHTS:
 		waitForSafeToInsert();
 		for (i = 0; i < DUPLICATION; i++) {
-			insertLightsPacket(message->data.lightsMessageData.address, message->data.lightsMessageData.on);
+		insertLightsPacket(message->data.lightsMessageData.address, message->data.lightsMessageData.on);
 		}
 		break;
 		case COMMAND_EMERGENCY_STOP:
 		//needs testing
 		waitForSafeToInsert();
 		insertSpeedPacket(0, 1, false, SPEEDMODE_14STEP);
-		break;
-		case COMMAND_ENTER_SERVICE_MODE:
+		break;*/
+		/*case COMMAND_ENTER_SERVICE_MODE:
 		enterServiceMode();
 
-		break;
+		break;*/
 		case COMMAND_REQUEST_BUFFER_SIZE:
 		//nothing to actually do, this is done in response to every single message atm
 		break;
@@ -302,14 +328,14 @@ void processMessage(message_t* message){
 		case COMMAND_SHIFT_REGISTER_DATA:
 		//this is data that will be sent out over SPI for the LED drivers/point motors
 		//once all the data has been collected it will be shifted out and a latch pin raised
-			setShiftRegisterData(message->data.shiftRegisterData.startByte,message->data.shiftRegisterData.data);
+		setShiftRegisterData(message->data.shiftRegisterData.startByte,message->data.shiftRegisterData.data);
 		
 		break;
 		case COMMAND_SET_SHIFT_REGISTER_LENGTH:
-			resetShiftRegister(message->data.shiftRegisterLengthData.length);
+		resetShiftRegister(message->data.shiftRegisterLengthData.length);
 		break;
 		case COMMAND_OUTPUT_SHIFT_REGISTER:
-			outputShiftRegister();
+		outputShiftRegister();
 		break;
 		default:
 		transmitCommsDebug(2);
@@ -414,7 +440,7 @@ void oldprocessInput(bool blocking) {
 			/*
 			* Pop into programming mode, write the CV, pop back out.
 			*/
-			setCVwithDirectMode(message.data.programmeDirectByteMessageData.cv, message.data.programmeDirectByteMessageData.newValue);
+			setCVwithDirectMode(message.data.programmeDirectByteMessageData.cvValue, message.data.programmeDirectByteMessageData.newValue);
 			break;
 			case COMMAND_PROGRAMME_ADDRESS:
 			setAddress(message.data.newAddressMessageData.newAddress);
