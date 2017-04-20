@@ -1036,11 +1036,3 @@ ISR(TIMER0_COMPA_vect) {
 	updateNextOutput(&progTrackState);
 	
 }
-
-ISR(TIMER1_COMPA_vect) {
-	if(progTrackCurrent > MAX_PROG_CURRENT){
-		emergencyCutPower(false);
-		return;
-	}
-	setOutputsFromInterrupt(&progTrackState);
-}
