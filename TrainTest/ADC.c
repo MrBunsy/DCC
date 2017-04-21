@@ -109,8 +109,7 @@ ISR(ADC_vect)
 		//for any other 'thread' waiting for a new value
 		//progTrackCurrentUpdated = true;
 		progTrackCurrentBuffer[progTrackCurrentBufferPos]=progTrackCurrent;
-		progTrackCurrentBufferPos++;
-		progTrackCurrentBufferPos%=PROG_TRACK_CURRENT_BUFFER_SIZE;
+		progTrackCurrentBufferPos=(progTrackCurrentBufferPos+1) &PROG_TRACK_CURRENT_BUFFER_MASK;
 		readingMainTrack = true;
 	}
 	
