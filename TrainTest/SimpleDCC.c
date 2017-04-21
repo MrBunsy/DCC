@@ -96,6 +96,12 @@ void insertIdlePacket(bool longPreamble) {
 	packet->longPreamble = longPreamble;
 }
 
+void insertIdlePackets(bool longPreamble, uint8_t n){
+	for(uint8_t i=0;i<n;i++){
+		insertIdlePacket(longPreamble);
+	}
+}
+
 /*
 * Insert a reset packet at the end of the packetbuffer
 */
@@ -107,6 +113,12 @@ void insertResetPacket(bool longPreamble) {
 	packet->longPreamble = longPreamble;
 }
 
+void insertResetPackets(bool longPreamble, uint8_t n){
+	for(uint8_t i=0;i<n;i++){
+		insertResetPacket(longPreamble);
+	}
+}
+
 /*
 * Insert a page preset packet at the end of the packetbuffer
 */
@@ -116,6 +128,12 @@ void insertPagePresetPacket(bool longPreamble) {
 	packet->data[0] = 0b00000001;
 	packet->dataBytes = 1;
 	packet->longPreamble = longPreamble;
+}
+
+void insertPagePresetPackets(bool longPreamble, uint8_t n){
+	for(uint8_t i=0;i<n;i++){
+		insertPagePresetPacket(longPreamble);
+	}
 }
 
 /*
@@ -320,7 +338,7 @@ uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksu
 	uint8_t i,j;
 	uint8_t cvValue = 0;
 	//uint8_t baseCurrents[8];
-	//volatile uint8_t currents[8];
+	volatile uint8_t currents[8];
 	
 	operatingState=ENTER_SERVICE_MODE;
 	//wait till we've entered
@@ -330,10 +348,10 @@ uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksu
 	
 	//for each bit
 	for(i=0;i<8;i++){
-		for(j=0;j<3;j++){//min 3
-			insertResetPacket(true);
-		}
-		for (j = 0; j < 8; j++) {
+
+		insertResetPackets(true,3);
+
+		for (j = 0; j < 8; j++) {//was 8
 			packet = getInsertPacketPointer();
 			packet->address = 0x78 | ((cv >> 8) & 0b11); //read CV, with the 2 MSB of CV number
 			packet->data[0] = cv & 0xff; //lowest 8 bits of cv
@@ -342,22 +360,28 @@ uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksu
 			packet->longPreamble = true;
 		}
 		
-		for(j=0;j<2;j++){
-			insertResetPacket(true);
-		}
-		while(getPacketsInBuffer() > 2);
+
+		
+
+		while(getPacketsInBuffer() > 4);
 		
 		uint8_t current = getAvgProgTrackCurrent();
+		
+		insertResetPackets(true,20);
 		
 		if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
 			//Setb(response.cv,i);
 			cvValue |= 1<<i;
 		}
-		//currents[i]=current;
+		currents[i]=current;
 		//baseCurrents[i] = baseCurrent;
 	}
 	//leave once the buffer has run out
 	operatingState = LEAVE_SERVICE_MODE;
+	
+	//just for debugging for now
+	setProgTrackPower(false);
+	
 	return cvValue;
 	
 }

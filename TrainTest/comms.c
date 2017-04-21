@@ -262,7 +262,10 @@ void processMessage(message_t* message){
 		case COMMAND_READ_CV:
 		//cvResponse = 
 		cv = readCVWithDirectMode(message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.callback, message->data.directByteCVMessageData.callbackSub);
+		//I do not understand why, but often the first attempt to sent a message is lost. TODO find out why! this feels like a major issue somewhere, repetition is just a work around
 		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);//, RESPONSE_CV_READ);
+		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);
+		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(message->data.newAddressMessageData.newAddress);

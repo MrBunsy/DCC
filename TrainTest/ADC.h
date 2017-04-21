@@ -20,7 +20,8 @@ uint8_t getAvgProgTrackCurrent(void);
 
 volatile uint16_t currentDrawValue;
 
-#define PROG_TRACK_CURRENT_BUFFER_SIZE (20)
+
+#define PROG_TRACK_CURRENT_BUFFER_SIZE (32)
 
 volatile extern uint8_t mainTrackCurrent;
 volatile extern uint8_t progTrackCurrent;
