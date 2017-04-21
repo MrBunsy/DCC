@@ -93,7 +93,7 @@ packet format definition may have a length of between 3 and 6 data bytes each se
 //if running DC test, how long between switching modes
 #define DC_DELAY (1000)
 
-#define  ACK_SAMPLE_THRESHOLD       (2)
+#define  ACK_SAMPLE_THRESHOLD       (5)
 
 //true when it's safe to insert a new packet into the packetBuffer
 volatile bool safeToInsert;

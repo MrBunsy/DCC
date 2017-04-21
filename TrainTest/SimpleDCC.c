@@ -362,11 +362,12 @@ uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksu
 		
 
 		
-
+		//read the average current that's been buffered when we're half way through sending the read bit packets - bit trial and error to find this, seems to work
 		while(getPacketsInBuffer() > 4);
 		
 		uint8_t current = getAvgProgTrackCurrent();
 		
+		//give good long pause between bits
 		insertResetPackets(true,20);
 		
 		if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
