@@ -33,17 +33,30 @@ typedef enum {
 	COMMAND_SET_SHIFT_REGISTER_LENGTH,
 	COMMAND_SHIFT_REGISTER_DATA,//part (or all) of the data to be sent out over SPI, then have the enable pin raised.
 	COMMAND_OUTPUT_SHIFT_REGISTER,
+	COMMAND_READ_CV,
+	COMMAND_PROGRAMME_DIRECT_BIT,//write a single bit to a CV in service mode
 	
 	RESPONSE_PACKET_BUFFER_SIZE = 100, //inform the listener how many packets are currently in the buffer
 	RESPONSE_COMMS_ERROR,
 	//current current draw measured from ADC
 	REPONSE_CURRENT,
+	//one response is used for all reading, writing and verifing. it contains the same information and the callbacks can be used to identify what it is responding to
+	RESPONSE_CV,//_READ,
+	//RESPONSE_CV_BIT_VERIFY,
+	//RESPONSE_CV_BYTE_VERIFY,
 } commandType_t;
 
 typedef enum{
 	MAIN_TRACK = 0,
 	PROG_TRACK
 }trackType_t;
+
+typedef enum{
+	READ_PROG_TRACK=0,
+	WRITE_BYTE_PROG_TRACK,
+	WRITE_BIT_PROG_TRACK
+	
+	}cvResponseType_t;
 
 //used for finding the start of a packet:
 #define SYNC_INT (0xffccccff)
@@ -70,6 +83,15 @@ typedef struct{
 typedef struct{
 	uint16_t length;
 }shiftRegisterLengthMessageData_t;
+
+typedef struct{
+	//uint8_t responseType;
+	uint16_t cv;
+	uint8_t cvValue;
+	uint16_t callback;
+	uint16_t callbackSub;
+	uint8_t success;
+}cvResponseMessageData_t;
 
 typedef struct {
 	uint8_t address;
@@ -98,8 +120,13 @@ typedef struct {
 
 typedef struct{
 	uint16_t cv;
+	uint16_t callback;
+	uint16_t callbackSub;
+	//at end so this message can be used by both requests for read and write
 	uint8_t newValue;
-} programmeDirectByteMessageData_t;
+	//after this so the non-bit write can also use this message
+	uint8_t bit;
+} directByteCVMessageData_t;
 
 typedef struct{
 	uint8_t packetsInBuffer;
@@ -120,12 +147,13 @@ typedef union {
 	lightsMessageData_t lightsMessageData;
 	newAddressMessageData_t newAddressMessageData;
 	opsModePacketMessageData_t opsModePacketMessageData;
-	programmeDirectByteMessageData_t programmeDirectByteMessageData;
+	directByteCVMessageData_t directByteCVMessageData;
 	packetBufferSizeData_t packetBufferSizeData;
 	currentDrawData_t currentDrawData;
 	trackPoweredData_t trackPoweredData;
 	shiftregisterMessageData_t shiftRegisterData;
 	shiftRegisterLengthMessageData_t shiftRegisterLengthData;
+	cvResponseMessageData_t cvResponseData;
 } messageDataUnion_t;
 
 //#pragma pack(1)
@@ -139,6 +167,7 @@ typedef struct {
 
 
 void transmitMessage(uint8_t* messagePointer);
+void transmitCVResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success);
 void transmitPacketBufferSize(uint8_t size, uint8_t* current);
 message_t readMessage(void);
 void processInput(void);

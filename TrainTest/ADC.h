@@ -15,11 +15,20 @@
 void adc_init();
 uint8_t adc_read();
 void printADCValue();
+//uint8_t getProgTrackValue();
+uint8_t getAvgProgTrackCurrent(void);
 
 volatile uint16_t currentDrawValue;
 
+//power of 2, and also set the mask (all bits 1 below the buffer size) TODO calculate mask from buffer size
+#define PROG_TRACK_CURRENT_BUFFER_SIZE (64)
+#define PROG_TRACK_CURRENT_BUFFER_MASK (0x3f)
+
 volatile extern uint8_t mainTrackCurrent;
 volatile extern uint8_t progTrackCurrent;
+//volatile extern uint8_t progTrackCurrentBuffer[PROG_TRACK_CURRENT_BUFFER_SIZE];
+//volatile extern bool progTrackCurrentUpdated;
+
 
 #define ADC_PORT PORTA
 #define ADC_PORT_DIR DDRA
