@@ -182,10 +182,10 @@ void transmitCurrentDraw(uint8_t current){
 	transmitMessage((uint8_t*)&message);
 }
 
-void transmitReadResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success){//, uint8_t responseType
+void transmitCVResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success){
 	message_t message;
 	//TODO
-	message.commandType=RESPONSE_CV_READ;
+	message.commandType=RESPONSE_CV;
 	//message.commandType= responseType;
 	message.data.cvResponseData.cvValue=cvValue;
 	message.data.cvResponseData.callback=callback;
@@ -240,9 +240,9 @@ uint8_t calculateCRC(message_t* message){
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
-	uint8_t cv;
-	//cvReadResponse_t cvResponse;
-	//USART_Transmit('r');
+	uint8_t cvValue;
+	cvResponse_t cvResponse;
+	//bool success;
 	
 	if(!checkCRC(message)){
 		transmitCommsDebug(4);
@@ -255,17 +255,24 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		//cvResponse = 
-		setCVwithDirectMode( message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
-		//transmitReadResult(message->data.directByteCVMessageData.cv, cvResponse.cvValue, message->data.cvResponseData.callback,message->data.cvResponseData.callbackSub, cvResponse.success, RESPONSE_CV_BYTE_VERIFY);
+		cvResponse = setCVwithDirectMode( message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		for(i=0;i<3;i++){
+			transmitCVResult( message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
+		}
 		break;
 		case COMMAND_READ_CV:
 		//cvResponse = 
-		cv = readCVWithDirectMode(message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.callback, message->data.directByteCVMessageData.callbackSub);
+		cvResponse = readCVWithDirectMode(message->data.directByteCVMessageData.cv);
 		//I do not understand why, but often the first attempt to sent a message is lost. TODO find out why! this feels like a major issue somewhere, repetition is just a work around
-		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);//, RESPONSE_CV_READ);
-		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);
-		transmitReadResult( message->data.directByteCVMessageData.cv, cv, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, true);
+		for(i=0;i<3;i++){
+			transmitCVResult( message->data.directByteCVMessageData.cv, cvValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
+		}
+		break;
+		case COMMAND_PROGRAMME_DIRECT_BIT:
+		cvResponse = setCVBitwithDirectMode(message->data.directByteCVMessageData.bit, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		for(i=0;i<3;i++){
+			transmitCVResult( message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
+		}
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
 		setAddress(message->data.newAddressMessageData.newAddress);
@@ -274,22 +281,18 @@ void processMessage(message_t* message){
 		
 		for (i = 0; i < message->data.opsModePacketMessageData.repeat; i++) {
 			waitForSafeToInsert();
-			//for(i=0;i< DUPLICATION;i++){
 			packet = getInsertPacketPointer();
 			//address is actually just the first data byte as far as DCC/JMRI is concerned, it's *normally* address which is why I called it hta to begin with
 			packet->address = message->data.opsModePacketMessageData.address;
 			//comms protocol is assumign that address is part of the data, so subtract one from this until internally
 			//address is subsumed into data
 			//also remove one because JMRI transmits the error detection packet, which *we* generate ourselves!
+			//todo compare JMRI's error detection packet with what we calculate - possibly not necessary because we generate CRC of whole message?
 			packet->dataBytes = message->data.opsModePacketMessageData.dataBytes - 2;
 			//error detection should be generated same as JMRI's
-			//will this work?
-			//packet->data=message->data.customPacketMessageData.data;
 			memcpy(packet->data, message->data.opsModePacketMessageData.data, message->data.opsModePacketMessageData.dataBytes);
-			//TODO will this need to change?
+			//this is only used for main track operations, all service mode requests have all their packets generated here, not at JMRI's end
 			packet->longPreamble = false;
-
-			//insertSpeedPacket(message->address, 80, true, SPEEDMODE_128STEP);
 		}
 		break;
 		/*case COMMAND_SET_SPEED:
@@ -317,6 +320,7 @@ void processMessage(message_t* message){
 		//nothing to actually do, this is done in response to every single message atm
 		break;
 		case COMMAND_REQUEST_CURRENT:
+		//this is now also in the general status response to every message
 		//		transmitCurrentDraw(adc_read());
 		break;
 		case COMMAND_SET_POWER:

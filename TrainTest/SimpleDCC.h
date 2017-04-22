@@ -113,6 +113,14 @@ typedef struct {
     //note that an error detection byte is a different type of data byte
 } dccPacket_t;
 
+/************************************************************************/
+/* general purpose stuct for returning read/write/verify results        */
+/************************************************************************/
+typedef struct {
+	bool success;
+	uint8_t cvValue;
+	}cvResponse_t;
+
 void runDCCDemo(uint8_t address);
 void simpleDCC_init();
 bool setAddress(uint8_t newAddress);
@@ -121,8 +129,9 @@ void insertLightsPacket(uint8_t address, bool on);
 void insertResetPacket(bool longPreamble);
 dccPacket_t *getInsertPacketPointer();
 uint8_t getPacketsInBuffer();
-bool setCVwithDirectMode(uint16_t cv, uint8_t newValue);
-uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksub);
+cvResponse_t setCVwithDirectMode(uint16_t cv, uint8_t newValue);
+cvResponse_t setCVBitwithDirectMode(uint8_t bit, uint16_t cv, uint8_t newValue);
+cvResponse_t readCVWithDirectMode(uint16_t cv);
 void waitForSafeToInsert();
 void emergencyCutPower();
 

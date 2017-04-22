@@ -273,32 +273,171 @@ bool isInServiceMode(){
 	return operatingState==SERVICE_MODE;
 }
 
-/*
-* direct mode service mode to set the address CV
-*
-* returns false if unsuccessful (although atm this will only happen if we can't enter service mode due to mech switch)
-*
-* cv is 10bits
-*/
-bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
-	/*_delay_ms(500);
-	setDataLED();
-	_delay_ms(500);
-	setIdleLED();
-	_delay_ms(500);
-	setDataLED();
-	_delay_ms(500);
-	setIdleLED();*/
+
+/************************************************************************/
+/* this function assumes that you are already in service mode it makes no attempt to leave service mode either */
+/************************************************************************/
+bool verifyCV(uint16_t cv, uint8_t value){
+	
+	uint8_t i;
+	//largely copied from DCC++ PacketRegister.cpp
+	uint8_t baseCurrent = getAvgProgTrackCurrent();
+	dccPacket_t* packet;
+
+	insertResetPackets(true,3);
+
+	
+	for (i = 0; i < 8; i++) {
+		packet = getInsertPacketPointer();
+		/*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
+		two bit address (AA) in the first data byte being the most significant bits of the CV number.
+		CC=10 Bit Manipulation
+		CC=01 Verify byte
+		CC=11 Write byte
+		*/
+
+		
+		packet->address = 0x74 | ((cv >> 8) & 0b11); //re-verify entire byte
+		packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+		packet->data[1] = value;
+		packet->dataBytes = 2;
+		packet->longPreamble = true;
+	}
+	
+	//block until we've transmitted 4 of the verify packets
+	while(getPacketsInBuffer() > 4);
+	uint8_t current = getAvgProgTrackCurrent();
+	
+	insertResetPackets(true,2);
+	
+	
+	
+	if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+		//success!
+		return true;
+	}
+	
+	return false;
+}
+
+cvResponse_t setCVBitwithDirectMode(uint8_t bit, uint16_t cv, uint8_t newValue){
+	//cv '1' is actually cv 0
+	cv--;
 
 	uint8_t i;
 	dccPacket_t *packet;
+	cvResponse_t response;
+	response.success=false;
+	
+	//ensure only 1 bit long
+	newValue&=0x01;
+	//ensure only three bits long
+	bit&=0x07;
 
-	waitForSafeToInsert();
-
+	operatingState=ENTER_SERVICE_MODE;
+	//wait till we've entered
+	while(operatingState!=SERVICE_MODE);
+	
+	uint8_t baseCurrent = getAvgProgTrackCurrent();
+	
 	//at least three reset packets with long preamble
-	for (i = 0; i < 10; i++) {//formerlly 5
-		insertResetPacket(true);
+	insertResetPackets(true,3);
+
+
+	for (i = 0; i < 8; i++) {
+		packet = getInsertPacketPointer();
+		/*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
+		two bit address (AA) in the first data byte being the most significant bits of the CV number.
+		CC=10 Bit Manipulation
+		CC=01 Verify byte
+		CC=11 Write byte
+		
+		if bit manipulation
+		long-preamble 0 011110AA 0 AAAAAAAA 0 111KDBBB 0 EEEEEEEE 1
+		K: 1 for write, 0 for verify
+		D: value to write or verify
+		B: address of bit 
+		*/
+		
+		packet->address = 0x78 | ((cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
+		packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+		packet->data[1] = 0xF0 | (newValue << 3) | bit;//write bit
+		packet->dataBytes = 2;
+		packet->longPreamble = true;
 	}
+
+	insertResetPackets(true,8);
+	
+	insertIdlePackets(true, 10);
+	
+	
+	
+	//largely copied from DCC++ PacketRegister.cpp
+	//uint8_t baseCurrent = getAvgProgTrackCurrent();
+
+	insertResetPackets(true,3);
+
+	
+	for (i = 0; i < 8; i++) {
+		packet = getInsertPacketPointer();
+		/*long-preamble 0 0111CCAA 0 AAAAAAAA 0 DDDDDDDD 0 EEEEEEEE 1
+		two bit address (AA) in the first data byte being the most significant bits of the CV number.
+		CC=10 Bit Manipulation
+		CC=01 Verify byte
+		CC=11 Write byte
+		*/
+
+		
+		packet->address = 0x78 | ((cv >> 8) & 0b11); //re-verify entire byte
+		packet->data[0] = cv & 0xff; //lowest 8 bits of cv
+		packet->data[1] = 0xE0  | (newValue << 3) | bit;//VERIFY bit (should pulse motor if value matches)
+		packet->dataBytes = 2;
+		packet->longPreamble = true;
+	}
+	
+	//block until we've transmitted 4 of the verify packets
+	while(getPacketsInBuffer() > 4);
+	uint8_t current = getAvgProgTrackCurrent();
+	
+	insertResetPackets(true,2);
+	
+	//a bit of a hack that will result in the power to the track being cut off briefly:
+	operatingState = LEAVE_SERVICE_MODE;
+	
+	if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
+		//success!
+		response.success=true;
+	}
+	
+	return response;
+}
+
+/*
+* direct mode service mode to set the address CV
+*
+* returns false if unsuccessful (if verify failed)
+*
+* cv is 10bits
+*/
+cvResponse_t setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
+
+	//cv '1' is actually cv 0
+	cv--;
+
+	uint8_t i;
+	dccPacket_t *packet;
+	cvResponse_t response;
+	response.cvValue=newValue;
+
+	operatingState=ENTER_SERVICE_MODE;
+	//wait till we've entered
+	while(operatingState!=SERVICE_MODE);
+	
+	//uint8_t baseCurrent = getAvgProgTrackCurrent();
+	
+	//at least three reset packets with long preamble
+	insertResetPackets(true,3);
+
 
 	for (i = 0; i < 15; i++) {
 		packet = getInsertPacketPointer();
@@ -308,8 +447,7 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 		CC=01 Verify byte
 		CC=11 Write byte
 		*/
-		//cv '1' is actually cv 0
-		cv--;
+		
 		
 		//01111100 = 7c
 		packet->address = 0b01111100 | ((cv >> 8) & 0b11); //write to CV, with the 2 MSB of CV number
@@ -319,20 +457,20 @@ bool setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 		packet->longPreamble = true;
 	}
 
-	//at least 6 reset packets
-	for (i = 0; i < 16; i++) {//was 8
-		insertResetPacket(true);
-	}
-	
-	//a bit of a hack that will result in the power to the track being cut off briefly:
+	insertResetPackets(true,8);
+	response.success = verifyCV(cv,newValue);
+	//leave service mode once the packet buffer has run out
 	operatingState = LEAVE_SERVICE_MODE;
-	return true;
+	
+	return response;
 }
 
 
-uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksub){
+
+cvResponse_t readCVWithDirectMode(uint16_t cv){
 	
 	cv--;
+	cvResponse_t response;
 	
 	dccPacket_t *packet;
 	uint8_t i,j;
@@ -353,9 +491,9 @@ uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksu
 
 		for (j = 0; j < 8; j++) {//was 8
 			packet = getInsertPacketPointer();
-			packet->address = 0x78 | ((cv >> 8) & 0b11); //read CV, with the 2 MSB of CV number
+			packet->address = 0x78 | ((cv >> 8) & 0b11); //bit manipulation of this CV
 			packet->data[0] = cv & 0xff; //lowest 8 bits of cv
-			packet->data[1] = 0xE8+i;//which bit to read
+			packet->data[1] = 0xE8+i;//which bit to read (0xE... is read, 0xF... is write) 
 			packet->dataBytes = 2;
 			packet->longPreamble = true;
 		}
@@ -377,18 +515,26 @@ uint8_t readCVWithDirectMode(uint16_t cv, uint16_t callback, uint16_t callbacksu
 		currents[i]=current;
 		//baseCurrents[i] = baseCurrent;
 	}
+	
+	response.cvValue=cvValue;
+	//TODO now verify the entire byte, as a check that we've read it correctly! should increase accuracy a lot :D (idea from DCC++)
+	response.success = verifyCV(cv,cvValue);
+	
 	//leave once the buffer has run out
 	operatingState = LEAVE_SERVICE_MODE;
 	
 	//just for debugging for now
-	setProgTrackPower(false);
+	//setProgTrackPower(false);
 	
-	return cvValue;
+	
+	
+	return response;
 	
 }
 
 /*
 * Use address-only mode to set an address
+TODO update this for new service-mode track (this used to occur on the main track)
 */
 bool setAddress(uint8_t newAddress) {
 	//return setCVwithDirectMode(1, newAddress);
