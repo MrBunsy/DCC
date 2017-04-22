@@ -785,7 +785,9 @@ public class DccppServer extends SocketCommsServer {
                 int cv = Integer.parseInt(splitCommand[2]);
                 int value = Integer.parseInt(splitCommand[3]);
                 nmra = NmraPacket.opsCvWriteByte(cabAddress, cabAddress > 127, cv, value);
-
+                
+                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Writing cv on main track CV "+cv+"="+value);
+                
                 queueMessage(SimpleDCCPacket.createFromDCCPacket(nmra, REPEAT_OPS_MODE_PROGRAMMING));
             }
             break;
