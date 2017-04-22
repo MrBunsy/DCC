@@ -240,7 +240,7 @@ uint8_t calculateCRC(message_t* message){
 void processMessage(message_t* message){
 	dccPacket_t *packet;
 	uint8_t i;
-	uint8_t cvValue;
+	//uint8_t cvValue;
 	cvResponse_t cvResponse;
 	//bool success;
 	
@@ -265,7 +265,7 @@ void processMessage(message_t* message){
 		cvResponse = readCVWithDirectMode(message->data.directByteCVMessageData.cv);
 		//I do not understand why, but often the first attempt to sent a message is lost. TODO find out why! this feels like a major issue somewhere, repetition is just a work around
 		for(i=0;i<3;i++){
-			transmitCVResult( message->data.directByteCVMessageData.cv, cvValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
+			transmitCVResult( message->data.directByteCVMessageData.cv,cvResponse.cvValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
 		}
 		break;
 		case COMMAND_PROGRAMME_DIRECT_BIT:

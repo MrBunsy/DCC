@@ -524,7 +524,7 @@ cvResponse_t readCVWithDirectMode(uint16_t cv){
 	operatingState = LEAVE_SERVICE_MODE;
 	
 	//just for debugging for now
-	//setProgTrackPower(false);
+	setProgTrackPower(false);
 	
 	
 	
