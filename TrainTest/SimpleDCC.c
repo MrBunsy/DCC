@@ -276,8 +276,14 @@ bool isInServiceMode(){
 
 /************************************************************************/
 /* this function assumes that you are already in service mode it makes no attempt to leave service mode either */
+/* CV has already had 1 subtracted */
 /************************************************************************/
 bool verifyCV(uint16_t cv, uint8_t value){
+	
+	insertResetPackets(true,20);
+	
+	//wait for any previous motor movement to have stopped
+	while(getPacketsInBuffer() > 2);
 	
 	uint8_t i;
 	//largely copied from DCC++ PacketRegister.cpp
@@ -310,7 +316,8 @@ bool verifyCV(uint16_t cv, uint8_t value){
 	
 	insertResetPackets(true,2);
 	
-	
+	//just for debugging for now
+	//setProgTrackPower(false);
 	
 	if(current > baseCurrent && current - baseCurrent > ACK_SAMPLE_THRESHOLD){
 		//success!
@@ -515,10 +522,12 @@ cvResponse_t readCVWithDirectMode(uint16_t cv){
 		currents[i]=current;
 		//baseCurrents[i] = baseCurrent;
 	}
+	//purely for debugging
+	volatile success = verifyCV(cv,cvValue);
 	
 	response.cvValue=cvValue;
 	//TODO now verify the entire byte, as a check that we've read it correctly! should increase accuracy a lot :D (idea from DCC++)
-	response.success = verifyCV(cv,cvValue);
+	response.success = success;
 	
 	//leave once the buffer has run out
 	operatingState = LEAVE_SERVICE_MODE;
