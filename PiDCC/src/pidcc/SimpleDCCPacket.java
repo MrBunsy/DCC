@@ -15,7 +15,7 @@ public class SimpleDCCPacket {
     //9 is the size of the old message, 4 sync bytes, 1 CRC bytes
     public final static int MESSAGE_SIZE = (9 + 4 + 1);
     //MAX_MESSAGE_DATA_BYTES - 2
-    public final static int SHIFT_REG_BYTES_PER_MESSAGE = (8-2);
+    public final static int SHIFT_REG_BYTES_PER_MESSAGE = (8 - 2);
     //this is the AVR's max data bytes + address, which we treat as a bit of data
     public final static int MAX_DCC_DATA_BYTES = 6;
     public final static int COMMAND_PROG_DIRECT_BYTE = 0,
@@ -26,11 +26,19 @@ public class SimpleDCCPacket {
             COMMAND_SET_POWER = 9,
             COMMAND_SET_SHIFT_REGISTER_LENGTH = 10,
             COMMAND_SHIFT_REGISTER_DATA = 11,
-            COMMAND_OUTPUT_SHIFT_REGISTER = 12;
+            COMMAND_OUTPUT_SHIFT_REGISTER = 12,
+            COMMAND_READ_CV = 13;
 
     public final static int RESPONSE_PACKET_BUFFER_SIZE = 100,
             RESPONSE_COMMS_ERROR = 101,
-            RESPONSE_CURRENT = 102;
+            RESPONSE_CURRENT = 102,
+            RESPONSE_CV_READ = 103,
+            RESPONSE_CV_BIT_VERIFY = 104,
+            RESPONSE_CV_BYTE_VERIFY = 105;
+
+    public final static int CV_READ_PROG_TRACK = 0,
+            CV_WRITE_BYTE_PROG_TRACK = 1,
+            CV_WRITE_BIT_PROG_TRACK = 2;
 
     public final static int MAIN_TRACK = 0, PROG_TRACK = 1;
 
@@ -70,27 +78,64 @@ public class SimpleDCCPacket {
     }
 
     /**
-     * TODO details about this, can't remember anything about it
+     * write a CV and provide callbacks
      *
-     * @param cv
-     * @param newValue
+     * @param cv address of CV (10bits)
+     * @param newValue new value of CV (byte)
+     * @param callback 16bit int to echo back with the response
+     * @param subcallback another 16bit int to echo back with the response
      * @return
      */
-    public static ByteBuffer createProgrammeDirectByte(int cv, int newValue) {
+    public static ByteBuffer writeCVDirectByte(int cv, int newValue, int callback, int subcallback) {
         ByteBuffer bb = createHeader();
 
         //message type byte
         bb.put((byte) (COMMAND_PROG_DIRECT_BYTE & 0xff));
 
-        //cv (uint16)
-        //bb.putChar((char) cv);
-        //lowest byte
-        bb.put((byte) (cv & 0xff));
-        //highest byte
-        bb.put((byte) ((cv >> 8) & 0xff));
+//        //cv (uint16)
+//        //bb.putChar((char) cv);
+//        //lowest byte
+//        bb.put((byte) (cv & 0xff));
+//        //highest byte
+//        bb.put((byte) ((cv >> 8) & 0xff));
+//        
+        //CV uint16 first
+        bb.putShort((short) (cv & 0xffff));
+        //callback uint16
+        bb.putShort((short) (callback & 0xffff));
+
+        //callbacksub  uint16
+        bb.putShort((short) (subcallback & 0xffff));
 
         //new value (byte)
         bb.put((byte) newValue);
+
+        addFooter(bb);
+
+        return bb;
+    }
+
+    /**
+     * read a CV and provide callbacks
+     *
+     * @param cv address of CV (10bits)
+     * @param callback 16bit int to echo back with the response
+     * @param subcallback another 16bit int to echo back with the response
+     * @return
+     */
+    public static ByteBuffer readCVDirectByte(int cv, int callback, int subcallback) {
+        ByteBuffer bb = createHeader();
+
+        //message type byte
+        bb.put((byte) (COMMAND_READ_CV & 0xff));
+
+        //CV uint16 first
+        bb.putShort((short) (cv & 0xffff));
+        //callback uint16
+        bb.putShort((short) (callback & 0xffff));
+
+        //callbacksub  uint16
+        bb.putShort((short) (subcallback & 0xffff));
 
         addFooter(bb);
 
@@ -131,22 +176,21 @@ public class SimpleDCCPacket {
         bb.put((byte) (COMMAND_SET_SHIFT_REGISTER_LENGTH & 0xff));
 
         bb.putShort((short) (length & 0xffff));
-        
+
         addFooter(bb);
         return bb;
     }
-    
-    public static ByteBuffer setShiftRegisterData(int startByte, byte[] data){
+
+    public static ByteBuffer setShiftRegisterData(int startByte, byte[] data) {
         ByteBuffer bb = createHeader();
 
         bb.put((byte) (COMMAND_SHIFT_REGISTER_DATA & 0xff));
 
         bb.putShort((short) (startByte & 0xffff));
-        
+
         //TODO check data is less than SHIFT_REG_BYTES_PER_MESSAGE long
-        
         bb.put(data);
-        
+
         addFooter(bb);
         return bb;
     }

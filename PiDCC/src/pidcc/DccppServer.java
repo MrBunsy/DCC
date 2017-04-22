@@ -18,6 +18,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Date;
 import java.util.List;
 
 import static pidcc.SimpleDCCPacket.MESSAGE_SIZE;
@@ -50,6 +51,9 @@ public class DccppServer extends SocketCommsServer {
 //    private File settingsFile;
     private String settingsFilePath;
     private final static double currentFilterAlpha = 0.5;
+    //how many times to repeat a packet to programme a CV in ops mode
+    public final static int REPEAT_OPS_MODE_PROGRAMMING = 4;
+    private ServiceModeRequest serviceModeRequest;
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath, int shiftRegisterLength) {
         super(socket, serialComms);
@@ -63,16 +67,16 @@ public class DccppServer extends SocketCommsServer {
         try {
 //            reader = new FileReader(settingsFilePath);
             List<String> jsonLines = Files.readAllLines(Paths.get(settingsFilePath));
-            String json="";
-            for(String line : jsonLines){
-                json+=line;
+            String json = "";
+            for (String line : jsonLines) {
+                json += line;
             }
             loadJson(json);
 
         } catch (IOException ex) {
-            System.out.println("Settings file not found or failed to be processed: "+settingsFilePath+" ("+ex.getMessage()+")");
+            System.out.println("Settings file not found or failed to be processed: " + settingsFilePath + " (" + ex.getMessage() + ")");
         }
-        
+        serviceModeRequest = null;
         updateShiftRegister();
 //        reader.r
 
@@ -80,17 +84,17 @@ public class DccppServer extends SocketCommsServer {
 //            this.cabList[i] = new Cab();
 //        }
     }
-    
-    private void loadJson(String json){
+
+    private void loadJson(String json) {
         Gson gson = new Gson();
         StoredState state = gson.fromJson(json, StoredState.class);
         shiftRegisterLength = state.shiftRegisterLength;
         turnoutList = state.turnouts;
     }
-    
+
     public void updateCurrentDraw(int current) {
         //this.current = current;
-        this.current = (int)Math.round(currentFilterAlpha * current + (1-currentFilterAlpha)*this.current);
+        this.current = (int) Math.round(currentFilterAlpha * current + (1 - currentFilterAlpha) * this.current);
     }
 
     public void stopEverything() {
@@ -102,7 +106,7 @@ public class DccppServer extends SocketCommsServer {
         //pop a posion pill on the queue so that uartWrite isn't stuck waiting for an empty queue for ever
         //stand in poision pill that the AVR won't care about for now!
         //IDEA - last message is also a shutdown power for the track!
-        transmitMessageNow(SimpleDCCPacket.requestAVRPacketBufferSize());
+        queueMessage(SimpleDCCPacket.requestAVRPacketBufferSize());
     }
 
     /**
@@ -127,7 +131,7 @@ public class DccppServer extends SocketCommsServer {
 //        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
 //        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
 //        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(1));
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(3));
+        queueMessage(SimpleDCCPacket.setShiftRegisterLength(3));
 ////        byte[] testdata = 
 //        transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(0, new byte[]{(byte) 0xff, (byte) 0xff, (byte) 0xff}));
 //
@@ -139,7 +143,7 @@ public class DccppServer extends SocketCommsServer {
 
 //                fillUARTQueue();
                 requestAVRPacketBufferSize();
-
+                checkServiceModeTimeouts();
             }
             try {
                 //TODO ...do this better. A proper wait?
@@ -152,12 +156,29 @@ public class DccppServer extends SocketCommsServer {
         System.out.println("Stopping DCC++ Server");
     }
 
-    public void requestAVRPacketBufferSize() {
-        try {
-            uartQueue.put(SimpleDCCPacket.requestAVRPacketBufferSize());
-        } catch (InterruptedException ex) {
-            Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+    /**
+     * Check to see if we haven't received a response from a service mode request
+     */
+    private void checkServiceModeTimeouts(){
+        if(this.serviceModeRequest !=null){
+            Date now = new Date();
+            long seconds = (now.getTime()-serviceModeRequest.start.getTime())/1000;
+            if(seconds > ServiceModeRequest.TIMEOUT_SECONDS){
+                //todo: generalise from just readcv
+                
+                returnString("<r" + serviceModeRequest.callback + "|" + serviceModeRequest.callbacksub + "|" + serviceModeRequest.cv + " " + 0 + ">");
+                serviceModeRequest=null;
+            }
         }
+    }
+    
+    public void requestAVRPacketBufferSize() {
+//        try {
+            //uartQueue.put(SimpleDCCPacket.requestAVRPacketBufferSize());
+            queueMessage(SimpleDCCPacket.requestAVRPacketBufferSize());
+//        } catch (InterruptedException ex) {
+//            Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+//        }
     }
 
     /**
@@ -176,13 +197,14 @@ public class DccppServer extends SocketCommsServer {
             }
         }
         for (ByteBuffer message : messages) {
-            try {
+//            try {
                 //TODO check queue large enough, with ltos of registers could eaisly not be
                 //need proper system there
-                uartQueue.put(message);
-            } catch (InterruptedException ex) {
-                Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
-            }
+                //uartQueue.put(message);
+                queueMessage(message);
+//            } catch (InterruptedException ex) {
+//                Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
+//            }
         }
     }
 
@@ -197,7 +219,7 @@ public class DccppServer extends SocketCommsServer {
             returnString("<X>");
         } else {
             for (Turnout t : turnoutList) {
-                returnString("<H " + t.getId() + " "  + (t.getThrown() ? "1" : "0") + ">");//+ t.getAddress() + " " + t.getSubAddress() + " "
+                returnString("<H " + t.getId() + " " + (t.getThrown() ? "1" : "0") + ">");//+ t.getAddress() + " " + t.getSubAddress() + " "
             }
         }
     }
@@ -222,21 +244,21 @@ public class DccppServer extends SocketCommsServer {
                 data[t.getAddress()] |= (byte) (((t.getThrown() ? 1 : 0) << t.getSubAddress()) & 0xff);
             }
         }
-        
+
         //TODO probably not do this every time?
-        transmitMessageNow(SimpleDCCPacket.setShiftRegisterLength(shiftRegisterLength));
-        
+        queueMessage(SimpleDCCPacket.setShiftRegisterLength(shiftRegisterLength));
+
         //transmit the shift register in chunks
         for (int i = 0; i < SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE; i += SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE) {
             int endOfRange = i + SimpleDCCPacket.SHIFT_REG_BYTES_PER_MESSAGE;
             if (endOfRange > shiftRegisterLength) {
                 endOfRange = shiftRegisterLength;
             }
-            transmitMessageNow(SimpleDCCPacket.setShiftRegisterData(i, Arrays.copyOfRange(data, i, endOfRange)));
+            queueMessage(SimpleDCCPacket.setShiftRegisterData(i, Arrays.copyOfRange(data, i, endOfRange)));
 
         }
 
-        transmitMessageNow(SimpleDCCPacket.outputShiftRegister());
+        queueMessage(SimpleDCCPacket.outputShiftRegister());
     }
 
     /**
@@ -308,21 +330,25 @@ public class DccppServer extends SocketCommsServer {
      *
      * @param packet
      */
-    private void transmitMessageNow(ByteBuffer message) {
+    private void queueMessage(ByteBuffer message) {
         try {
             //send this one right now, to reduce delay from the throttle
             //I think this will be fine, as any old messges will be furhter ahead in the queue and any after this will ahve the new speedvalue
+            if(this.serviceModeRequest == null){
             uartQueue.put(message);
+            }else{
+                System.out.println("Can't send message, in service mode");
+            }
         } catch (InterruptedException ex) {
             Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
-    public void setBothTrackPower(boolean power) {
+    public void setTrackPower(boolean power) {
         this.mainTrackEnabled = power;
-        this.progTrackEnabled = power;
-        transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.MAIN_TRACK, power));
-        transmitMessageNow(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.PROG_TRACK, power));
+        //this.progTrackEnabled = power;
+        queueMessage(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.MAIN_TRACK, power));
+        //queueMessage(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.PROG_TRACK, power));
     }
 
     private void processDccppCommand(String command) {
@@ -344,6 +370,7 @@ public class DccppServer extends SocketCommsServer {
         Turnout turnout;
         int id;
         int subaddress;
+        byte[] nmra;
 
         switch (splitCommand[0].charAt(0)) {
 
@@ -374,7 +401,7 @@ public class DccppServer extends SocketCommsServer {
                 cab.setSpeed(speed, forwards);
                 cab.setAddress(cabAddress);
 
-                transmitMessageNow(cab.getSpeedMessage());
+                queueMessage(cab.getSpeedMessage());
 
                 this.returnString("<T " + register + " " + speed + " " + (forwards ? 1 : 0) + ">");
                 break;
@@ -439,31 +466,31 @@ public class DccppServer extends SocketCommsServer {
                     //lights :) (probably the only one that's actually ever going to be used)
                     cab.setFunction(0, (byte1 & 0x1 << 4) > 0);
                     //send it straight away
-                    transmitMessageNow(cab.getFunction0_4Message());
+                    queueMessage(cab.getFunction0_4Message());
                 } else if ((byte1 & 0xf0) == 176) {
                     //functions 5 to 8
                     for (int i = 0; i < 4; i++) {
                         cab.setFunction(i + 5, (byte1 & 0x1 << i) > 0);
                     }
-                    transmitMessageNow(cab.getFunction5_8Message());
+                    queueMessage(cab.getFunction5_8Message());
                 } else if ((byte1 & 0xf0) == 160) {
                     //functions 9 to 12
                     for (int i = 0; i < 4; i++) {
                         cab.setFunction(i + 9, (byte1 & 0x1 << i) > 0);
                     }
-                    transmitMessageNow(cab.getFunction9_12Message());
+                    queueMessage(cab.getFunction9_12Message());
                 } else if ((byte1 & 0xff) == 222) {
                     //functions F13-F20
                     for (int i = 0; i < 8; i++) {
                         cab.setFunction(i + 13, (byte2 & 0x1 << i) > 0);
                     }
-                    transmitMessageNow(cab.getFunction13_20Message());
+                    queueMessage(cab.getFunction13_20Message());
                 } else if ((byte1 & 0xff) == 223) {
                     //functions F21-F28
                     for (int i = 0; i < 8; i++) {
                         cab.setFunction(i + 21, (byte2 & 0x1 << i) > 0);
                     }
-                    transmitMessageNow(cab.getFunction21_28Message());
+                    queueMessage(cab.getFunction21_28Message());
                 }
                 break;
 
@@ -495,8 +522,8 @@ public class DccppServer extends SocketCommsServer {
                 int activate = Integer.parseInt(splitCommand[3]);
                 //throwing in support for this, but no way of testing atm (don't have any accessory decoders!)
                 //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
-                byte[] nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
-                transmitMessageNow(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
+                nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
+                queueMessage(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
                 break;
 
             /**
@@ -627,8 +654,8 @@ public class DccppServer extends SocketCommsServer {
              * *** WRITE CONFIGURATION VARIABLE BYTE TO ENGINE DECODER ON MAIN
              * OPERATIONS TRACK ***
              */
-            case 'w':      // <w CAB CV VALUE>
-                /*
+            case 'w': // <w CAB CV VALUE>
+            /*
                  *    writes, without any verification, a Configuration Variable to the decoder of an engine on the main operations track
                  *    
                  *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
@@ -636,16 +663,22 @@ public class DccppServer extends SocketCommsServer {
                  *    VALUE: the value to be written to the Configuration Variable memory location (0-255)
                  *    
                  *    returns: NONE
-                 */
-//      mRegs->writeCVByteMain(com+1);
-                break;
+             */ {
+                cabAddress = Integer.parseInt(splitCommand[1]);
+                int cv = Integer.parseInt(splitCommand[2]);
+                int value = Integer.parseInt(splitCommand[3]);
+                nmra = NmraPacket.opsCvWriteByte(cabAddress, cabAddress > 127, cv, value);
+
+                queueMessage(SimpleDCCPacket.createFromDCCPacket(nmra, REPEAT_OPS_MODE_PROGRAMMING));
+            }
+            break;
 
             /**
              * *** WRITE CONFIGURATION VARIABLE BIT TO ENGINE DECODER ON MAIN
              * OPERATIONS TRACK ***
              */
-            case 'b':      // <b CAB CV BIT VALUE>
-                /*
+            case 'b': // <b CAB CV BIT VALUE>
+            /*
                  *    writes, without any verification, a single bit within a Configuration Variable to the decoder of an engine on the main operations track
                  *    
                  *    CAB:  the short (1-127) or long (128-10293) address of the engine decoder 
@@ -654,9 +687,16 @@ public class DccppServer extends SocketCommsServer {
                  *    VALUE: the value of the bit to be written (0-1)
                  *    
                  *    returns: NONE
-                 */
-//      mRegs->writeCVBitMain(com+1);
-                break;
+             */ {
+                cabAddress = Integer.parseInt(splitCommand[1]);
+                int cv = Integer.parseInt(splitCommand[2]);
+                int bit = Integer.parseInt(splitCommand[3]);
+                int value = Integer.parseInt(splitCommand[4]);
+                nmra = NmraPacket.opsCvWriteBit(cabAddress, cabAddress > 127, cv, value, bit);
+
+                queueMessage(SimpleDCCPacket.createFromDCCPacket(nmra, REPEAT_OPS_MODE_PROGRAMMING));
+            }
+            break;
 
             /**
              * *** WRITE CONFIGURATION VARIABLE BYTE TO ENGINE DECODER ON
@@ -702,8 +742,8 @@ public class DccppServer extends SocketCommsServer {
              * *** READ CONFIGURATION VARIABLE BYTE FROM ENGINE DECODER ON
              * PROGRAMMING TRACK ***
              */
-            case 'R':     // <R CV CALLBACKNUM CALLBACKSUB>
-                /*    
+            case 'R': // <R CV CALLBACKNUM CALLBACKSUB>
+            /*    
                  *    reads a Configuration Variable from the decoder of an engine on the programming track
                  *    
                  *    CV: the number of the Configuration Variable memory location in the decoder to read from (1-1024)
@@ -712,9 +752,20 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <r CALLBACKNUM|CALLBACKSUB|CV VALUE)
                  *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if read could not be verified
-                 */
-                //      pRegs->readCV(com+1);
-                break;
+             */ {
+                int cv = Integer.parseInt(splitCommand[1]);
+                int callback = Integer.parseInt(splitCommand[2]);
+                int callbacksub = Integer.parseInt(splitCommand[3]);
+                queueMessage(SimpleDCCPacket.readCVDirectByte(cv, callback, callbacksub));
+                serviceModeRequest=new ServiceModeRequest();
+                serviceModeRequest.callback=callback;
+                serviceModeRequest.callbacksub=callbacksub;
+                serviceModeRequest.start=new Date();
+                serviceModeRequest.cv = cv;
+                //the AVR should respond, and that will be processed in the UART read thread
+                //TODO a proper timeout system?
+            }
+            break;
 
             /**
              * *** TURN ON POWER FROM MOTOR SHIELD TO TRACKS ***
@@ -725,7 +776,7 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <p1>
                  */
-                setBothTrackPower(true);
+                setTrackPower(true);
                 returnString("<p1>");
                 break;
 
@@ -738,7 +789,7 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <p0>
                  */
-                setBothTrackPower(false);
+                setTrackPower(false);
                 returnString("<p0>");
                 break;
 
@@ -833,7 +884,7 @@ public class DccppServer extends SocketCommsServer {
                 storeMe.shiftRegisterLength = shiftRegisterLength;
                 storeMe.turnouts = turnoutList;
                 String jsonString = gson.toJson(storeMe);
-                {
+                 {
                     try {
                         //java 7 does python style try-with-resources!
                         try (FileWriter writer = new FileWriter(new File(settingsFilePath))) {
@@ -860,7 +911,7 @@ public class DccppServer extends SocketCommsServer {
                  */
                 File settingsFile = new File(settingsFilePath);
                 settingsFile.delete();
-                
+
                 returnString("<O>");
                 break;
 
@@ -996,18 +1047,16 @@ public class DccppServer extends SocketCommsServer {
                 int currentDraw = (0xff & message[2]);// | (message[3] << 8);
                 //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
                 currentDraw = currentDraw << 2;
-                
+
                 updateCurrentDraw(currentDraw);
-                
+
 //                System.out.println("Received current draw of " + currentDraw);
                 //gain of 11 on voltage over 0.15ohm resistor
                 //1024bit ADC 0-3.3v (assuming 3.3v supply)
                 double voltsMeasured = (((double) current) / 1024) * 3.3;
                 double amps = (voltsMeasured / 11.0) / 0.15;
 
-                
-                Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw filtered:" + this.current + " new: "+currentDraw+" = " + amps + "A", packetsInBuffer);
-                
+                //Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "packets in buffer on AVR: {0}. Current draw filtered:" + this.current + " new: "+currentDraw+" = " + amps + "A", packetsInBuffer);
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
                 }
@@ -1016,6 +1065,21 @@ public class DccppServer extends SocketCommsServer {
                 int errorType = 0xff & message[1];
                 Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Comms error from AVR type: {0}", errorType);
                 break;
+            case SimpleDCCPacket.RESPONSE_CV_READ: {
+                int cv = (message[1] & 0xff) | ((message[2] & 0xff) << 8);
+                int cvValue = message[3] & 0xff;
+                int callBackNum = (message[4] & 0xff) | ((message[5] & 0xff) << 8);
+                int callBackSub = (message[6] & 0xff) | ((message[7] & 0xff) << 8);
+                //TODO, going to have to track callbacks or edit the messaging :(
+
+                //<r CALLBACKNUM|CALLBACKSUB|CV VALUE>
+                //seems to need no space between the r and callback?
+                returnString("<r" + callBackNum + "|" + callBackSub + "|" + cv + " " + cvValue + ">");
+                //go back into normal mode
+                serviceModeRequest=null;
+
+            }
+            break;
 //            case SimpleDCCPacket.RESPONSE_CURRENT:
 //                int currentDraw = 0xff & message[1];
 //                //dccpp assumes reading the full 10 bits of the AVR's ADC, I only use 8bits, so shift left
@@ -1044,7 +1108,7 @@ public class DccppServer extends SocketCommsServer {
 
                     } catch (IOException ex) {
                         //Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
-                        System.out.println("Lost TCP Connection: "+ex.getMessage());
+                        System.out.println("Lost TCP Connection: " + ex.getMessage());
                         running = false;
                     }
                 } while (running && sb.indexOf(">") < 0);
@@ -1052,9 +1116,9 @@ public class DccppServer extends SocketCommsServer {
                 //sb has collected an entire instruction!
                 if (running) {
                     processDccppCommand(sb.toString());
-                }else{
+                } else {
                     //got here and not running any more, power off the track
-                    setBothTrackPower(false);
+                    setTrackPower(false);
                 }
             }
             //stop everything else
@@ -1170,5 +1234,13 @@ public class DccppServer extends SocketCommsServer {
             this.stop();
         }
 
+    }
+
+    class ServiceModeRequest {
+        public static final int TIMEOUT_SECONDS = 5;
+        public int callback;
+        public int callbacksub;
+        public int cv;
+        public Date start;
     }
 }

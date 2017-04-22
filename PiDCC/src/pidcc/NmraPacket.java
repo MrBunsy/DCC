@@ -769,6 +769,42 @@ public class NmraPacket {
 
         return NmraPacket.threeBytePacket(address, longAddr, (byte) arg1, (byte) arg2, (byte) arg3);
     }
+    
+    /**
+     * (Added by Luke Wallin, using DCC++ source code as reference)
+     * 
+     * for writing a single bit in a CV on the main track
+     * 
+     * @param address
+     * @param longAddr
+     * @param cvNum
+     * @param data
+     * @param bitNum
+     * @return 
+     */
+    public static byte[] opsCvWriteBit(int address, boolean longAddr, int cvNum, int data, int bitNum) {
+        //log.debug("opswrite {} {} {}", address, cvNum, data);
+
+        if (!addressCheck(address, longAddr)) {
+            return null;  // failed!
+        }
+
+        if (data < 0 || data > 255) {
+            log.log(Level.SEVERE,"invalid data " + data);
+            return null;
+        }
+        if (cvNum < 1 || cvNum > 1024) {
+            log.log(Level.SEVERE,"invalid CV number " + cvNum);
+            return null;
+        }
+
+        // end sanity checks, format output
+        int arg1 = 0xE8 + (((cvNum - 1) >> 8) & 0x03);
+        int arg2 = (cvNum - 1) & 0xFF;
+        int arg3 = (0xF0+data*8+bitNum) & 0xFF;
+
+        return NmraPacket.threeBytePacket(address, longAddr, (byte) arg1, (byte) arg2, (byte) arg3);
+    }
 
     public static byte[] speedStep128Packet(int address, boolean longAddr, int speed, boolean fwd) {
         ////log.debug("128 step packet {} {}", address, speed);
