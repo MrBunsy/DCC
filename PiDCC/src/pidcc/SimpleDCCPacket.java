@@ -182,7 +182,7 @@ public class SimpleDCCPacket {
      * @param newAddress
      * @return
      */
-    public static ByteBuffer createProgrammeAddress(int newAddress) {
+    public static ByteBuffer createProgrammeAddressPacket(int newAddress) {
         ByteBuffer bb = createHeader();
 
         //message type byte

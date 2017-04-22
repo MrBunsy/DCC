@@ -59,7 +59,8 @@ public class DccppServer extends SocketCommsServer {
         CV_READ_BYTE,
         CV_READ_BIT,
         CV_WRITE_BYTE,
-        CV_WRITE_BIT
+        CV_WRITE_BIT,
+        ADDRESS_MODE_WRITE,
     }
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath, int shiftRegisterLength) {
@@ -419,6 +420,9 @@ public class DccppServer extends SocketCommsServer {
                 break;
             case CV_WRITE_BIT:
                 queueMessage(SimpleDCCPacket.writeCVDirectBit(cv, bit, cvValue, callback, callbacksub));
+                break;
+            case ADDRESS_MODE_WRITE:
+                queueMessage(SimpleDCCPacket.createProgrammeAddressPacket(cvValue));
                 break;
         }
         //add after queuing the message, so that message will be the last to go through.
@@ -843,7 +847,18 @@ public class DccppServer extends SocketCommsServer {
                 //if not, keeping track of the request will cause a timeout
             }
             break;
-
+            case 'A': //< A newaddress CALLBACKNUM CALLBACKSUB >
+                /**
+                 * My own personal addition, allow setting the address via address only mode
+                 * NOT TESTED - didn't need this in the end
+                 */
+            {
+                int newAddress = Integer.parseInt(splitCommand[1]);
+                int callback = Integer.parseInt(splitCommand[2]);
+                int callbacksub = Integer.parseInt(splitCommand[3]);
+                makeServiceModeRequest(callback, callbacksub, 0, CVProgOperation.ADDRESS_MODE_WRITE, newAddress, 0);
+            }
+                break;
             /**
              * *** WRITE CONFIGURATION VARIABLE BIT TO ENGINE DECODER ON
              * PROGRAMMING TRACK ***
