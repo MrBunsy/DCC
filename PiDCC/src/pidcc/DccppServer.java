@@ -53,7 +53,14 @@ public class DccppServer extends SocketCommsServer {
     private final static double currentFilterAlpha = 0.5;
     //how many times to repeat a packet to programme a CV in ops mode
     public final static int REPEAT_OPS_MODE_PROGRAMMING = 4;
-    private ServiceModeRequest serviceModeRequest;
+    private ArrayList<ServiceModeRequest> serviceModeRequestList;
+
+    public enum CVProgOperation {
+        CV_READ_BYTE,
+        CV_READ_BIT,
+        CV_WRITE_BYTE,
+        CV_WRITE_BIT
+    }
 
     public DccppServer(Socket socket, TwoWaySerialComm serialComms, String settingsFilePath, int shiftRegisterLength) {
         super(socket, serialComms);
@@ -76,7 +83,7 @@ public class DccppServer extends SocketCommsServer {
         } catch (IOException ex) {
             System.out.println("Settings file not found or failed to be processed: " + settingsFilePath + " (" + ex.getMessage() + ")");
         }
-        serviceModeRequest = null;
+        serviceModeRequestList = new ArrayList<>();
         updateShiftRegister();
 //        reader.r
 
@@ -157,25 +164,50 @@ public class DccppServer extends SocketCommsServer {
     }
 
     /**
-     * Check to see if we haven't received a response from a service mode request
+     * Check to see if we haven't received a response from a service mode
+     * request
      */
-    private void checkServiceModeTimeouts(){
-        if(this.serviceModeRequest !=null){
+    private void checkServiceModeTimeouts() {
+        if (serviceModeRequestList.size() > 0) {
+            ServiceModeRequest serviceModeRequest = serviceModeRequestList.get(0);
+
             Date now = new Date();
-            long seconds = (now.getTime()-serviceModeRequest.start.getTime())/1000;
-            if(seconds > ServiceModeRequest.TIMEOUT_SECONDS){
-                //todo: generalise from just readcv
-                
-                returnString("<r" + serviceModeRequest.callback + "|" + serviceModeRequest.callbacksub + "|" + serviceModeRequest.cv + " " + 0 + ">");
-                serviceModeRequest=null;
+            long seconds = (now.getTime() - serviceModeRequest.start.getTime()) / 1000;
+            if (seconds > ServiceModeRequest.TIMEOUT_SECONDS) {
+
+                //-1 because this is a timeout, so we failed
+                replyToDCCPPWithCVResponse(serviceModeRequest, -1);
+                serviceModeRequestList.remove(0);
             }
         }
     }
-    
+
+    /**
+     * TODO think of better name. take the AVR's reply or timeout from this
+     * server and send a reply back to the TCP client over DCC++ protocol
+     *
+     * @param serviceModeRequest the request that is being responded to
+     * @param value the CV or bit value to return, if -1 this was a failure.
+     */
+    private void replyToDCCPPWithCVResponse(ServiceModeRequest serviceModeRequest, int value) {
+        switch (serviceModeRequest.operation) {
+            case CV_READ_BYTE:
+            case CV_WRITE_BYTE:
+                //return -1 because operation, wahtever it was, failed
+                returnString("<r" + serviceModeRequest.callback + "|" + serviceModeRequest.callbacksub + "|" + serviceModeRequest.cv + " " + value + ">");
+                break;
+            case CV_WRITE_BIT:
+            case CV_READ_BIT://not sure reading a single bit actually exists in dcc++
+                //<r CALLBACKNUM|CALLBACKSUB|CV BIT VALUE)
+                returnString("<r" + serviceModeRequest.callback + "|" + serviceModeRequest.callbacksub + "|" + serviceModeRequest.cv + " " + serviceModeRequest.bit + " " + value + ">");
+                break;
+        }
+    }
+
     public void requestAVRPacketBufferSize() {
 //        try {
-            //uartQueue.put(SimpleDCCPacket.requestAVRPacketBufferSize());
-            queueMessage(SimpleDCCPacket.requestAVRPacketBufferSize());
+        //uartQueue.put(SimpleDCCPacket.requestAVRPacketBufferSize());
+        queueMessage(SimpleDCCPacket.requestAVRPacketBufferSize());
 //        } catch (InterruptedException ex) {
 //            Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
 //        }
@@ -198,10 +230,10 @@ public class DccppServer extends SocketCommsServer {
         }
         for (ByteBuffer message : messages) {
 //            try {
-                //TODO check queue large enough, with ltos of registers could eaisly not be
-                //need proper system there
-                //uartQueue.put(message);
-                queueMessage(message);
+            //TODO check queue large enough, with ltos of registers could eaisly not be
+            //need proper system there
+            //uartQueue.put(message);
+            queueMessage(message);
 //            } catch (InterruptedException ex) {
 //                Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, null, ex);
 //            }
@@ -326,6 +358,15 @@ public class DccppServer extends SocketCommsServer {
     }
 
     /**
+     * return true if a service mode request is ongoing (or not timed out yet)
+     *
+     * @return
+     */
+    public boolean isInServiceMode() {
+        return serviceModeRequestList.size() > 0;
+    }
+
+    /**
      * Transmit a SimpleDCC message to the AVR now
      *
      * @param packet
@@ -334,9 +375,9 @@ public class DccppServer extends SocketCommsServer {
         try {
             //send this one right now, to reduce delay from the throttle
             //I think this will be fine, as any old messges will be furhter ahead in the queue and any after this will ahve the new speedvalue
-            if(this.serviceModeRequest == null){
-            uartQueue.put(message);
-            }else{
+            if (isInServiceMode()) {
+                uartQueue.put(message);
+            } else {
                 System.out.println("Can't send message, in service mode");
             }
         } catch (InterruptedException ex) {
@@ -351,6 +392,81 @@ public class DccppServer extends SocketCommsServer {
         //queueMessage(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.PROG_TRACK, power));
     }
 
+    /**
+     * perform a service mode operation
+     *
+     * @param callback
+     * @param callbacksub
+     * @param cv
+     * @param operation
+     * @param cvValue
+     * @param bit
+     */
+    public void makeServiceModeRequest(int callback, int callbacksub, int cv, CVProgOperation operation, int cvValue, int bit) {
+        ServiceModeRequest serviceModeRequest = new ServiceModeRequest();
+        serviceModeRequest.callback = callback;
+        serviceModeRequest.callbacksub = callbacksub;
+        serviceModeRequest.start = new Date();
+        serviceModeRequest.cv = cv;
+        serviceModeRequest.bit = bit;
+        serviceModeRequest.operation = operation;
+        serviceModeRequestList.add(serviceModeRequest);
+        switch (operation) {
+            case CV_READ_BYTE:
+                queueMessage(SimpleDCCPacket.readCVDirectByte(cv, callback, callbacksub));
+                break;
+            case CV_WRITE_BYTE:
+                queueMessage(SimpleDCCPacket.writeCVDirectByte(cv, cvValue, callback, callbacksub));
+                break;
+            case CV_WRITE_BIT:
+                queueMessage(SimpleDCCPacket.writeCVDirectBit(cv, bit, cvValue, callback, callbacksub));
+                break;
+        }
+    }
+
+    private ServiceModeRequest findServiceModeRequest(int callback, int callbacksub) {
+        for (ServiceModeRequest s : serviceModeRequestList) {
+            if (s.callback == callback && s.callbacksub == callbacksub) {
+                return s;
+            }
+        }
+
+        return null;
+    }
+//
+//    private void removeServiceModeRequest(int callback, int callbacksub) {
+//        ServiceModeRequest removeMe = null;
+//        
+//
+//        if (removeMe != null) {
+//            serviceModeRequestList.remove(removeMe);
+//        } else {
+//            Logger.getLogger(DccppServer.class.getName()).log(Level.WARNING, "Tried to remove a service mode request that wasn't found");
+//        }
+//    }
+
+    public void processCVResponse(int cv, int cvValue, int callBackNum, int callBackSub, boolean success) {
+
+        ServiceModeRequest request = findServiceModeRequest(callBackNum, callBackSub);
+        if (request != null) {
+            replyToDCCPPWithCVResponse(request, cvValue);
+            serviceModeRequestList.remove(request);
+
+        }
+
+    }
+
+//    /**
+//     * perform a service mode operation that doesn't care about a single bit
+//     *
+//     * @param callback
+//     * @param callbacksub
+//     * @param cv
+//     * @param operation
+//     */
+//    public void makeServiceModeRequest(int callback, int callbacksub, int cv, CVProgOperation operation) {
+//        makeServiceModeRequest(callback, callbacksub, cv, operation, -1);
+//    }
     private void processDccppCommand(String command) {
         command = tidyCommand(command);
 
@@ -702,8 +818,8 @@ public class DccppServer extends SocketCommsServer {
              * *** WRITE CONFIGURATION VARIABLE BYTE TO ENGINE DECODER ON
              * PROGRAMMING TRACK ***
              */
-            case 'W':      // <W CV VALUE CALLBACKNUM CALLBACKSUB>
-                /*
+            case 'W': // <W CV VALUE CALLBACKNUM CALLBACKSUB>
+            /*
                  *    writes, and then verifies, a Configuration Variable to the decoder of an engine on the programming track
                  *    
                  *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
@@ -713,17 +829,26 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <r CALLBACKNUM|CALLBACKSUB|CV Value)
                  *    where VALUE is a number from 0-255 as read from the requested CV, or -1 if verificaiton read fails
-                 */
-                //      pRegs->writeCVByte(com+1);
-                //looking in the soruce code, those are ascii | symbols, not binary or
-                break;
+             */ //      pRegs->writeCVByte(com+1);
+            //looking in the soruce code, those are ascii | symbols, not binary or
+            {
+                int cv = Integer.parseInt(splitCommand[1]);
+                int cvValue = Integer.parseInt(splitCommand[2]);
+                int callback = Integer.parseInt(splitCommand[3]);
+                int callbacksub = Integer.parseInt(splitCommand[4]);
+
+                makeServiceModeRequest(callback, callbacksub, cv, CVProgOperation.CV_WRITE_BYTE, cvValue, 0);
+                //the AVR should respond, and that will be processed in the UART read thread
+                //if not, keeping track of the request will cause a timeout
+            }
+            break;
 
             /**
              * *** WRITE CONFIGURATION VARIABLE BIT TO ENGINE DECODER ON
              * PROGRAMMING TRACK ***
              */
-            case 'B':      // <B CV BIT VALUE CALLBACKNUM CALLBACKSUB>
-                /*
+            case 'B': // <B CV BIT VALUE CALLBACKNUM CALLBACKSUB>
+            /*
                  *    writes, and then verifies, a single bit within a Configuration Variable to the decoder of an engine on the programming track
                  *    
                  *    CV: the number of the Configuration Variable memory location in the decoder to write to (1-1024)
@@ -734,9 +859,18 @@ public class DccppServer extends SocketCommsServer {
                  *    
                  *    returns: <r CALLBACKNUM|CALLBACKSUB|CV BIT VALUE)
                  *    where VALUE is a number from 0-1 as read from the requested CV bit, or -1 if verificaiton read fails
-                 */
-                //      pRegs->writeCVBit(com+1);
-                break;
+             */ {
+                int cv = Integer.parseInt(splitCommand[1]);
+                int bit = Integer.parseInt(splitCommand[2]);
+                int newValue = Integer.parseInt(splitCommand[3]);
+                int callback = Integer.parseInt(splitCommand[4]);
+                int callbacksub = Integer.parseInt(splitCommand[5]);
+
+                makeServiceModeRequest(callback, callbacksub, cv, CVProgOperation.CV_WRITE_BIT, newValue, bit);
+                //the AVR should respond, and that will be processed in the UART read thread
+                //if not, keeping track of the request will cause a timeout
+            }
+            break;
 
             /**
              * *** READ CONFIGURATION VARIABLE BYTE FROM ENGINE DECODER ON
@@ -756,12 +890,8 @@ public class DccppServer extends SocketCommsServer {
                 int cv = Integer.parseInt(splitCommand[1]);
                 int callback = Integer.parseInt(splitCommand[2]);
                 int callbacksub = Integer.parseInt(splitCommand[3]);
-                queueMessage(SimpleDCCPacket.readCVDirectByte(cv, callback, callbacksub));
-                serviceModeRequest=new ServiceModeRequest();
-                serviceModeRequest.callback=callback;
-                serviceModeRequest.callbacksub=callbacksub;
-                serviceModeRequest.start=new Date();
-                serviceModeRequest.cv = cv;
+
+                makeServiceModeRequest(callback, callbacksub, cv, CVProgOperation.CV_READ_BIT, 0, 0);
                 //the AVR should respond, and that will be processed in the UART read thread
                 //TODO a proper timeout system?
             }
@@ -1065,18 +1195,14 @@ public class DccppServer extends SocketCommsServer {
                 int errorType = 0xff & message[1];
                 Logger.getLogger(DccppServer.class.getName()).log(Level.INFO, "Comms error from AVR type: {0}", errorType);
                 break;
-            case SimpleDCCPacket.RESPONSE_CV_READ: {
+            case SimpleDCCPacket.RESPONSE_CV: {
                 int cv = (message[1] & 0xff) | ((message[2] & 0xff) << 8);
                 int cvValue = message[3] & 0xff;
                 int callBackNum = (message[4] & 0xff) | ((message[5] & 0xff) << 8);
                 int callBackSub = (message[6] & 0xff) | ((message[7] & 0xff) << 8);
-                //TODO, going to have to track callbacks or edit the messaging :(
+                boolean success = message[8] > 0;
 
-                //<r CALLBACKNUM|CALLBACKSUB|CV VALUE>
-                //seems to need no space between the r and callback?
-                returnString("<r" + callBackNum + "|" + callBackSub + "|" + cv + " " + cvValue + ">");
-                //go back into normal mode
-                serviceModeRequest=null;
+                processCVResponse(cv, cvValue, callBackNum, callBackSub, success);
 
             }
             break;
@@ -1237,10 +1363,13 @@ public class DccppServer extends SocketCommsServer {
     }
 
     class ServiceModeRequest {
+
         public static final int TIMEOUT_SECONDS = 5;
         public int callback;
         public int callbacksub;
         public int cv;
         public Date start;
+        public CVProgOperation operation;
+        public int bit;
     }
 }

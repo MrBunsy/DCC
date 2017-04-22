@@ -19,7 +19,7 @@ public class SimpleDCCPacket {
     //this is the AVR's max data bytes + address, which we treat as a bit of data
     public final static int MAX_DCC_DATA_BYTES = 6;
     public final static int COMMAND_PROG_DIRECT_BYTE = 0,
-            COMMAND_OPERATIONS_MODE = 1,
+            COMMAND_OPERATIONS_MODE_PACKET = 1,
             COMMAND_PROG_ADDRESS = 2,
             COMMAND_REQUEST_BUFFER_SIZE = 7,
             COMMAND_REQUEST_CURRENT = 8,
@@ -27,14 +27,13 @@ public class SimpleDCCPacket {
             COMMAND_SET_SHIFT_REGISTER_LENGTH = 10,
             COMMAND_SHIFT_REGISTER_DATA = 11,
             COMMAND_OUTPUT_SHIFT_REGISTER = 12,
-            COMMAND_READ_CV = 13;
+            COMMAND_READ_CV = 13,
+            COMMAND_PROG_DIRECT_BIT = 14;
 
     public final static int RESPONSE_PACKET_BUFFER_SIZE = 100,
             RESPONSE_COMMS_ERROR = 101,
             RESPONSE_CURRENT = 102,
-            RESPONSE_CV_READ = 103,
-            RESPONSE_CV_BIT_VERIFY = 104,
-            RESPONSE_CV_BYTE_VERIFY = 105;
+            RESPONSE_CV = 103;
 
     public final static int CV_READ_PROG_TRACK = 0,
             CV_WRITE_BYTE_PROG_TRACK = 1,
@@ -109,6 +108,40 @@ public class SimpleDCCPacket {
 
         //new value (byte)
         bb.put((byte) newValue);
+
+        addFooter(bb);
+
+        return bb;
+    }
+
+    /**
+     * write a single bit in a CV and provide callbacks
+     *
+     * @param cv address of CV (10bits)
+     * @param bit which bit in the cv
+     * @param newValue new value of bit in CV (1 or 0)
+     * @param callback 16bit int to echo back with the response
+     * @param subcallback another 16bit int to echo back with the response
+     * @return
+     */
+    public static ByteBuffer writeCVDirectBit(int cv, int bit, int newValue, int callback, int subcallback) {
+        ByteBuffer bb = createHeader();
+
+        //message type byte
+        bb.put((byte) (COMMAND_PROG_DIRECT_BIT & 0xff));
+        
+        //CV uint16 first
+        bb.putShort((short) (cv & 0xffff));
+        //callback uint16
+        bb.putShort((short) (callback & 0xffff));
+
+        //callbacksub  uint16
+        bb.putShort((short) (subcallback & 0xffff));
+
+        //new value (1 or 0)
+        bb.put((byte) (newValue & 0x01));
+        //which bit is being written to
+        bb.put((byte) (bit & 0xff));
 
         addFooter(bb);
 
@@ -246,7 +279,7 @@ public class SimpleDCCPacket {
          * unused atm)
          */
         //message type byte
-        bb.put((byte) (COMMAND_OPERATIONS_MODE & 0xff));
+        bb.put((byte) (COMMAND_OPERATIONS_MODE_PACKET & 0xff));
 //        //priority byte (repeats atm)
 //        bb.put((byte) (1 & 0xff));
 
