@@ -464,8 +464,11 @@ cvResponse_t setCVwithDirectMode(uint16_t cv, uint8_t newValue) {
 		packet->longPreamble = true;
 	}
 
-	insertResetPackets(true,8);
+	insertResetPackets(true,20);
+	
 	response.success = verifyCV(cv,newValue);
+	//trying some extra long waiting to see if I can programme the bachman decoders with direct mode
+	insertResetPackets(true,100);
 	//leave service mode once the packet buffer has run out
 	operatingState = LEAVE_SERVICE_MODE;
 	
@@ -522,18 +525,17 @@ cvResponse_t readCVWithDirectMode(uint16_t cv){
 		currents[i]=current;
 		//baseCurrents[i] = baseCurrent;
 	}
-	//purely for debugging
-	volatile success = verifyCV(cv,cvValue);
+
 	
 	response.cvValue=cvValue;
 	//TODO now verify the entire byte, as a check that we've read it correctly! should increase accuracy a lot :D (idea from DCC++)
-	response.success = success;
+	response.success = verifyCV(cv,cvValue);
 	
 	//leave once the buffer has run out
 	operatingState = LEAVE_SERVICE_MODE;
 	
 	//just for debugging for now
-	setProgTrackPower(false);
+	//setProgTrackPower(false);
 	
 	
 	
