@@ -193,7 +193,6 @@ public class DccppServer extends SocketCommsServer {
         switch (serviceModeRequest.operation) {
             case CV_READ_BYTE:
             case CV_WRITE_BYTE:
-                //return -1 because operation, wahtever it was, failed
                 returnString("<r" + serviceModeRequest.callback + "|" + serviceModeRequest.callbacksub + "|" + serviceModeRequest.cv + " " + value + ">");
                 break;
             case CV_WRITE_BIT:
@@ -375,7 +374,7 @@ public class DccppServer extends SocketCommsServer {
         try {
             //send this one right now, to reduce delay from the throttle
             //I think this will be fine, as any old messges will be furhter ahead in the queue and any after this will ahve the new speedvalue
-            if (isInServiceMode()) {
+            if (!isInServiceMode()) {
                 uartQueue.put(message);
             } else {
                 System.out.println("Can't send message, in service mode");
@@ -410,7 +409,7 @@ public class DccppServer extends SocketCommsServer {
         serviceModeRequest.cv = cv;
         serviceModeRequest.bit = bit;
         serviceModeRequest.operation = operation;
-        serviceModeRequestList.add(serviceModeRequest);
+        
         switch (operation) {
             case CV_READ_BYTE:
                 queueMessage(SimpleDCCPacket.readCVDirectByte(cv, callback, callbacksub));
@@ -422,6 +421,8 @@ public class DccppServer extends SocketCommsServer {
                 queueMessage(SimpleDCCPacket.writeCVDirectBit(cv, bit, cvValue, callback, callbacksub));
                 break;
         }
+        //add after queuing the message, so that message will be the last to go through.
+        serviceModeRequestList.add(serviceModeRequest);
     }
 
     private ServiceModeRequest findServiceModeRequest(int callback, int callbacksub) {
@@ -449,7 +450,7 @@ public class DccppServer extends SocketCommsServer {
 
         ServiceModeRequest request = findServiceModeRequest(callBackNum, callBackSub);
         if (request != null) {
-            replyToDCCPPWithCVResponse(request, cvValue);
+            replyToDCCPPWithCVResponse(request, success ? cvValue : -1);
             serviceModeRequestList.remove(request);
 
         }
@@ -891,7 +892,7 @@ public class DccppServer extends SocketCommsServer {
                 int callback = Integer.parseInt(splitCommand[2]);
                 int callbacksub = Integer.parseInt(splitCommand[3]);
 
-                makeServiceModeRequest(callback, callbacksub, cv, CVProgOperation.CV_READ_BIT, 0, 0);
+                makeServiceModeRequest(callback, callbacksub, cv, CVProgOperation.CV_READ_BYTE, 0, 0);
                 //the AVR should respond, and that will be processed in the UART read thread
                 //TODO a proper timeout system?
             }
