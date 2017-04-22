@@ -255,7 +255,7 @@ void processMessage(message_t* message){
 		/*
 		* Pop into programming mode, write the CV, pop back out.
 		*/
-		cvResponse = setCVwithDirectMode( message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.cv);
+		cvResponse = setCVwithDirectMode( message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.newValue);
 		for(i=0;i<3;i++){
 			transmitCVResult( message->data.directByteCVMessageData.cv, message->data.directByteCVMessageData.newValue, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
 		}
@@ -275,7 +275,12 @@ void processMessage(message_t* message){
 		}
 		break;
 		case COMMAND_PROGRAMME_ADDRESS:
-		setAddress(message->data.newAddressMessageData.newAddress);
+		//this old instruction doesn't do any verification, but we need to return something to let the server know we've finished
+		cvResponse.success = setAddress(message->data.newAddressMessageData.newAddress);
+		//for(i=0;i<3;i++){
+		//	transmitCVResult( 1, message->data.newAddressMessageData.newAddress, message->data.directByteCVMessageData.callback,message->data.directByteCVMessageData.callbackSub, cvResponse.success);
+		//}
+		//TODO - need to modify to have callbacks to do this properly
 		break;
 		case COMMAND_OPERATIONS_MODE_PACKET:
 		

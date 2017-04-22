@@ -545,14 +545,16 @@ cvResponse_t readCVWithDirectMode(uint16_t cv){
 
 /*
 * Use address-only mode to set an address
-TODO update this for new service-mode track (this used to occur on the main track)
+ now updated for new service-mode track (this used to occur on the main track)
 */
 bool setAddress(uint8_t newAddress) {
 	//return setCVwithDirectMode(1, newAddress);
 	uint8_t i;
 	dccPacket_t *packet;
 	
-	waitForSafeToInsert();
+	operatingState=ENTER_SERVICE_MODE;
+	//wait till we've entered
+	while(operatingState!=SERVICE_MODE);
 	
 	//3 or more Reset Packets
 	for (i = 0; i < 5; i++) {
