@@ -639,8 +639,13 @@ public class DccppServer extends SocketCommsServer {
                 int activate = Integer.parseInt(splitCommand[3]);
                 //throwing in support for this, but no way of testing atm (don't have any accessory decoders!)
                 //assuming that subaddress is the same as 'output' in NMRA/JMRI speak
-                nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
-                queueMessage(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
+                try{
+                    nmra = NmraPacket.accDecoderPkt(cabAddress, activate, subaddress);
+                    queueMessage(SimpleDCCPacket.createFromDCCPacket(nmra, Cab.REPEATS));
+                }catch(IllegalArgumentException e){
+                    Logger.getLogger(DccppServer.class.getName()).log(Level.SEVERE, "Probably invalid accessory decoder address");
+                }
+                
                 break;
 
             /**
