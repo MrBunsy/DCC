@@ -1,0 +1,3 @@
+4 aspect signalling in JMRI
+
+create a signal head with R,G,Y and lunar, then create a signal MAST with BR 2003 4 aspect signal. the lunar should be the second yellow
