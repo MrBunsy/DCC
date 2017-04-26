@@ -9,6 +9,10 @@
 
 //at the packet level, what is happening? EG running, entering service mode (baseStates_t)
 volatile baseStates_t operatingState;
+//state of main track power before entering into service mode
+volatile bool preServiceModeMainTrackPower;
+//current state of main track power
+volatile bool mainTrackPower;
 
 //buffer to hold packets info to be sent
 dccPacket_t packetBuffer[PACKET_BUFFER_SIZE];
@@ -141,7 +145,7 @@ void insertPagePresetPackets(bool longPreamble, uint8_t n){
 */
 void enterOperationsMode(){
 	
-	Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);// in case was turned off at the end of programming mode
+	//do not touch the power, as this is controlled elsewhere (don't want to accidentally turn the power back on after service mode if it wasn't on before)
 	
 	operatingState = OPERATIONS_MODE;
 	transmittingPacket = 0;
@@ -186,7 +190,10 @@ void simpleDCC_init() {
 	minimum of ten (10) idle packets.
 	- RP-9.2.4 DCC Fail Safe
 	*/
-
+	
+	//track power is off by default
+	preServiceModeMainTrackPower = false;
+	mainTrackPower = false;
 	
 	
 	operatingState = OPERATIONS_MODE;
@@ -238,15 +245,15 @@ void setProgTrackPower(bool power){
 void setMainTrackPower(bool power){
 	if(power){
 		Setb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		//reset this
-		//highCurrentDrawMainTrack = false;
 		Clrb(LED_PORT, LED_OVERCURRENT);
 		}else{
 		Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	}
+	mainTrackPower = power;
 }
 
 bool enterServiceMode(){
+	preServiceModeMainTrackPower = mainTrackPower;
 	operatingState=SERVICE_MODE;
 	setMainTrackPower(false);
 	setProgTrackPower(true);
@@ -266,7 +273,7 @@ void leaveServiceMode(){
 	operatingState=OPERATIONS_MODE;
 	currentlyOperatingOutput = DCC_MAIN_TRACK_OUT;
 	setProgTrackPower(false);
-	setMainTrackPower(true);
+	setMainTrackPower(preServiceModeMainTrackPower);
 }
 
 bool isInServiceMode(){
@@ -826,18 +833,9 @@ void fillPacketBuffer() {
 		setIdleLED();
 		break;
 		case LEAVE_SERVICE_MODE:
-		// TODO remove this
-		//clear DCC output
-		//Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
-		//Clrb(DCC_PORT, DCC_MAIN_TRACK_OUT);
+
 		leaveServiceMode();
-		//leave it turned off for half a second (spec says optional power off, and this didn't seem to work before doing this)
-		//we're *in* the interrupt routine, so this should work fine - this is also why I can't turn off interrupts from here
-		//setDataLED();
-		//_delay_ms(500);
 		operatingState = OPERATIONS_MODE;
-		//insertIdlePacket(false);
-		
 		enterOperationsMode();
 		
 		break;
