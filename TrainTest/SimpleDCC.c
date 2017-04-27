@@ -1003,6 +1003,7 @@ uint8_t determineNextBit() {
 void emergencyCutPower(){
 	Clrb(DCC_PORT, DCC_MAIN_TRACK_ENABLE);
 	Clrb(DCC_PORT, DCC_PROG_TRACK_ENABLE);
+	mainTrackPower=false;
 	//also set the overcurrent LED
 	Setb(LED_PORT, LED_OVERCURRENT);
 }
