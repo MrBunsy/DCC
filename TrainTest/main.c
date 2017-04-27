@@ -99,6 +99,9 @@ int main(void) {
 	runDCCDemo(6);
 	#endif
 	
+	transmitStatus(getPacketsInBuffer(),mainTrackCurrent, mainTrackPower);
+	transmitStatus(getPacketsInBuffer(),mainTrackCurrent, mainTrackPower);
+	transmitStatus(getPacketsInBuffer(),mainTrackCurrent, mainTrackPower);
 	
 	#define BLOCKING_COMMS
 	
@@ -119,7 +122,7 @@ int main(void) {
 		//inform the listener if the packet buffer is getting low
 		uint8_t packetsInBuffer = getPacketsInBuffer();
 		//if (packetsInBuffer <= 2){
-		transmitPacketBufferSize(packetsInBuffer,(uint8_t*)&currentDrawValue);
+		transmitStatus(packetsInBuffer,mainTrackCurrent, mainTrackPower);
 		//something goes seriously wrong with the comms if I try sending another message here.
 		//unsure what caused it or if it even was on the AVR.
 		//transmitCurrentDraw(currentDrawValue);

@@ -102,6 +102,8 @@ volatile bool safeToInsert;
 volatile bool highCurrentDrawMainTrack;
 volatile bool highCurrentDrawProgTrack;
 
+extern volatile bool mainTrackPower;
+
 /*
  * the information required for a packet.  From this a whole real packet can be generated
  */

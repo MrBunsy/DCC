@@ -144,16 +144,15 @@ bool areSyncBytes(uint8_t* bytes){
 
 /************************************************************************/
 /* Transmit the current size of the packet buffer back to the listener  */
+/* also send current current draw and staet of power on main track      */
 /************************************************************************/
-void transmitPacketBufferSize(uint8_t size, uint8_t* currentDraw){
+void transmitStatus(uint8_t size, uint8_t currentDraw, bool trackPower){
 	message_t message;
 	
 	message.commandType=RESPONSE_PACKET_BUFFER_SIZE;
-	message.data.packetBufferSizeData.packetsInBuffer = size;
-	//message.data.genericMessageData.data[1] = currentDraw[0];//TODO properly
-	//message.data.genericMessageData.data[2] = currentDraw[1];
-	message.data.genericMessageData.data[1] = mainTrackCurrent;
-	message.data.genericMessageData.data[2] = 0;
+	message.data.statusMessageData.packetsInBuffer = size;
+	message.data.statusMessageData.mainTrackCurrent =currentDraw;
+	message.data.statusMessageData.mainTrackPowered = trackPower;
 	message.crc = calculateCRC(&message);
 	
 	transmitMessage((uint8_t*)&message);

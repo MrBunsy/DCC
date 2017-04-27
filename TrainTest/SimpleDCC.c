@@ -493,7 +493,6 @@ cvResponse_t readCVWithDirectMode(uint16_t cv){
 	uint8_t i,j;
 	uint8_t cvValue = 0;
 	//uint8_t baseCurrents[8];
-	volatile uint8_t currents[8];
 	
 	operatingState=ENTER_SERVICE_MODE;
 	//wait till we've entered
@@ -529,7 +528,6 @@ cvResponse_t readCVWithDirectMode(uint16_t cv){
 			//Setb(response.cv,i);
 			cvValue |= 1<<i;
 		}
-		currents[i]=current;
 		//baseCurrents[i] = baseCurrent;
 	}
 

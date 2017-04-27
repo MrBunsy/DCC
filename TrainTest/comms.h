@@ -130,7 +130,9 @@ typedef struct{
 
 typedef struct{
 	uint8_t packetsInBuffer;
-}packetBufferSizeData_t;
+	uint8_t mainTrackCurrent;
+	bool mainTrackPowered;
+}statusMessageData_t;
 
 typedef struct{
 	uint8_t whichTrack;
@@ -148,7 +150,7 @@ typedef union {
 	newAddressMessageData_t newAddressMessageData;
 	opsModePacketMessageData_t opsModePacketMessageData;
 	directByteCVMessageData_t directByteCVMessageData;
-	packetBufferSizeData_t packetBufferSizeData;
+	statusMessageData_t statusMessageData;
 	currentDrawData_t currentDrawData;
 	trackPoweredData_t trackPoweredData;
 	shiftregisterMessageData_t shiftRegisterData;
@@ -168,7 +170,7 @@ typedef struct {
 
 void transmitMessage(uint8_t* messagePointer);
 void transmitCVResult(uint16_t cv, uint8_t cvValue,uint16_t callback, uint16_t callbackSub,bool success);
-void transmitPacketBufferSize(uint8_t size, uint8_t* current);
+void transmitStatus(uint8_t size, uint8_t currentDraw, bool trackPower);
 message_t readMessage(void);
 void processInput(void);
 void transmitCommsDebug(uint8_t type);
