@@ -385,12 +385,23 @@ public class DccppServer extends SocketCommsServer {
     }
 
     public void setTrackPower(boolean power) {
-        this.mainTrackEnabled = power;
+        //this.mainTrackEnabled = power;
         //this.progTrackEnabled = power;
         queueMessage(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.MAIN_TRACK, power));
         //queueMessage(SimpleDCCPacket.setTrackPower(SimpleDCCPacket.PROG_TRACK, power));
     }
-
+    
+    /**
+     * process the power state from the AVR
+     * @param power 
+     */
+    public void acknowledgeRealTrackPower(boolean power){
+        if(power != mainTrackEnabled){
+            mainTrackEnabled = power;
+            returnString("<p"+(power ? 1:0)+">");
+        }
+    }
+    
     /**
      * perform a service mode operation
      *
@@ -915,7 +926,8 @@ public class DccppServer extends SocketCommsServer {
                  *    returns: <p1>
                  */
                 setTrackPower(true);
-                returnString("<p1>");
+                //string will be returned from status message from AVR
+                //returnString("<p1>");
                 break;
 
             /**
@@ -928,7 +940,7 @@ public class DccppServer extends SocketCommsServer {
                  *    returns: <p0>
                  */
                 setTrackPower(false);
-                returnString("<p0>");
+                //returnString("<p0>");
                 break;
 
             /**
@@ -1179,7 +1191,7 @@ public class DccppServer extends SocketCommsServer {
         int responseType = 0xff & message[0];
 
         switch (responseType) {
-            case SimpleDCCPacket.RESPONSE_PACKET_BUFFER_SIZE:
+            case SimpleDCCPacket.RESPONSE_STATUS:
                 int packetsInBuffer = 0xff & message[1];
 
                 int currentDraw = (0xff & message[2]);// | (message[3] << 8);
@@ -1198,6 +1210,9 @@ public class DccppServer extends SocketCommsServer {
                 if (packetsInBuffer < 5) {
                     fillUARTQueueWithRegisterInfo();
                 }
+                
+                boolean power = ((message[3]&0xff) > 0);
+                acknowledgeRealTrackPower(power);
                 break;
             case SimpleDCCPacket.RESPONSE_COMMS_ERROR:
                 int errorType = 0xff & message[1];
@@ -1211,6 +1226,7 @@ public class DccppServer extends SocketCommsServer {
                 boolean success = message[8] > 0;
 
                 processCVResponse(cv, cvValue, callBackNum, callBackSub, success);
+                
 
             }
             break;

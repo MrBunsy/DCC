@@ -30,7 +30,7 @@ public class SimpleDCCPacket {
             COMMAND_READ_CV = 13,
             COMMAND_PROG_DIRECT_BIT = 14;
 
-    public final static int RESPONSE_PACKET_BUFFER_SIZE = 100,
+    public final static int RESPONSE_STATUS = 100,
             RESPONSE_COMMS_ERROR = 101,
             RESPONSE_CURRENT = 102,
             RESPONSE_CV = 103;
