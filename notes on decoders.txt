@@ -1,0 +1,6 @@
+DCC Concepts Zen decoders:
+
+Work, but:
+ - They seem to take a while to start the motor, despite fiddling with min voltage and acceleration settings.
+ - They don't seem to power the motor enough when acknowledging CV reads for my hardware to sense the ack, so I can't read them.
+ - The (really good idea) capacitor pack doesn't fit in any of my N gauge locos - might fit in a steam tender though.
